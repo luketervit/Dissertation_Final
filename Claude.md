@@ -64,6 +64,8 @@ The "Ghost Shift": All simulation runs must track the cumulative opinion change 
 
 Sensitivity Analysis: When requested, run the simulation with varying Stubbornness or Volatility parameters to test robustness.
 
+Every time something is implemented you should write why we have chosen this option and any assumptions made in @implementation.md , this content should have enough detail to use as notes when writing out the thesis, but not too overloaded.
+
 📅 Milestones
 By Feb 5: Fully processed processed_agents.csv.
 
