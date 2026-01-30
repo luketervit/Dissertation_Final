@@ -356,3 +356,228 @@ High scores confirm we're capturing genuine ideological divides, not noisy/ambig
 - **Sample Inspection:** Manually review high-aggression users and edge cases for face validity
 - **Cross-Chunk Validation:** Compare political distributions across chunk 1 and chunk 2 for consistency
 - **Temporal Stability:** Check if political leaning distributions are stable across different months (May vs July)
+
+---
+
+## Step 2: Historical Replay Thread Selection (`scripts/find_best_thread.py`)
+
+### Design Decision: Single-Thread Micro-Simulation
+
+**What:** Instead of simulating an entire day of Twitter discourse, we anchor the ABM to a single high-engagement conversation thread for "Historical Replay" validation.
+
+**Why:**
+- **Temporal Constraint:** Chunk 1 only contains 2.7 hours of data (June 12, 2024, 21:18-23:59), not enough for 12h/12h or multi-day splits
+- **Testable Hypothesis:** Can the ABM predict *which lurkers will convert to active* given a specific provocative tweet and its early reply dynamics?
+- **Computational Feasibility:** Simulating 450k agents (1 root + 4 actives + 450k lurkers) is faster than city-scale ABMs
+- **Ground Truth:** We know the *expected* reply count (8,095) even if we only observe 4 in our time window
+
+**Selected Thread (Chunk 1):**
+
+| Metric | Value |
+|--------|-------|
+| Root Tweet ID | 1801027119356526704 |
+| Root User ID | 133028836 |
+| Timestamp | 2024-06-12 23:01:41 |
+| Expected Replies | 8,095 |
+| View Count | 450,132 |
+| Actual Replies in Dataset | 4 (0.05% coverage) |
+| Thread Duration | 34 minutes (23:07-23:41) |
+
+**Root Tweet Content:**
+```
+"Senate Republicans just blocked a bill to establish enforceable ethics rules
+for the Supreme Court. Justices take lavish gifts from MAGA donors and fly
+the flag of open bias in cases before them. We..."
+```
+
+**Why This Thread:**
+- **Highest engagement** in the 2.7-hour window (8,095 expected replies, 450k views)
+- **Politically charged topic** (Supreme Court ethics, MAGA) → triggers bounded confidence and backfire effects
+- **Posted by high-profile user** (likely Elizabeth Warren based on language/topic)
+- **Early observation window:** We see the first 34 minutes of replies, can model lurker→active conversion pressure
+
+### Implementation Strategy
+
+**Scenario:**
+The simulation replays the first 34 minutes after the root tweet is posted. Given:
+1. The root tweet's political DNA (classified from `processed_agents_raw_1_political.csv`)
+2. The 4 users who replied in the first 34 minutes (their DNA from classification)
+3. 450,127 lurker agents (spawned from view count using Pew 2024 distributions)
+
+**Question:** Can the ABM predict which lurkers experience sufficient `expressive_pressure` to convert to active in the next time window?
+
+**Validation Approach:**
+- **Phase 1 (0-34 min):** Playback the 4 actual replies, update all lurker agents' memory state
+- **Phase 2 (34+ min):** Continue simulation, let lurkers convert based on accumulated `expressive_pressure`
+- **Success Metric:** Do the simulated conversions' DNA profiles (political_label, emotion_label, hate_score) match the distribution of the expected 8,091 missing replies?
+
+**Output Files:**
+- `output/best_thread_metadata.json` - Root tweet info, reply IDs, user IDs, timeline
+- `output/best_thread_tweets.csv` - Full thread data (root + 4 replies) with timestamps
+
+### Assumptions & Limitations
+
+**Assumptions:**
+- The 4 observed replies are representative of the full 8,095 (unlikely; early replies often differ from late-stage pile-ons)
+- View count accurately represents lurker exposure (Twitter viewCount may include bots, multiple views per user)
+- Lurkers spawn with Pew 2024 national distributions (may not match Elizabeth Warren's actual follower demographics)
+
+**Limitations:**
+1. **Low Coverage (0.05%):** We only observe 4 of 8,095 replies, making ground-truth comparison difficult
+   - **Mitigation:** Focus on *distributional* validation (does simulated reply DNA match expected patterns) rather than exact count matching
+2. **No External Context:** The simulation doesn't model external events, breaking news, or influencer quote-tweets that could drive reply spikes
+3. **Single-Thread Scope:** Results only generalize to similar high-engagement political threads, not broader Twitter dynamics
+
+### Next Steps
+
+1. ✅ **Match Active Users to DNA:** Join reply `user_ids` with `processed_agents_raw_1_political.csv` to get political_label, hate_score, etc.
+2. **Spawn Lurker DNA:** Use Pew 2024 distributions to assign political_label to 450k lurkers
+3. **Build Mesa ABM:** Implement Active and Lurker agent classes with memory, bounded confidence, backfire logic
+4. **Run Historical Replay:** Step through the 34-minute timeline, inject real tweets, simulate lurker conversions
+5. **Sensitivity Analysis:** Vary `backfire_threshold`, `expressive_pressure` decay rates, and rerun
+
+---
+
+## Step 3: Agent DNA Extraction (`scripts/create_agents_for_thread.py`)
+
+### Design Decision: Updated Thread Selection
+
+**What:** Changed from Elizabeth Warren's Supreme Court tweet (4 replies, 0.05% coverage) to a Pelosi/MTG Jan 6 debate tweet with **183 actual replies** (46x more data).
+
+**New Selected Thread:**
+
+| Metric | Value |
+|--------|-------|
+| Root Tweet ID | 1801016461601001478 |
+| Root User ID | 2655242439 |
+| Timestamp | 2024-06-12 22:19:20 |
+| Total Tweets | 184 (1 root + 183 replies) |
+| Unique Users | 169 (some users posted multiple replies) |
+| Timeline Duration | 2h 29min (21:28 - 23:57) |
+| DNA Coverage | **100%** (all users classified) |
+
+**Root Tweet Content:**
+```
+"@brettbear482480 @RedWave_Press @RepMTG And I'd love to hear Pelosi's
+recordings. Just to shut MAGA up. Pelosi had zero to do with the violence
+that day. It's all on Trump and the people who showed up and took matters
+into their own hands. Literally."
+```
+
+**Why This Thread Is Better:**
+- **46x more data:** 183 replies vs 4 (Warren tweet)
+- **Cross-partisan debate:** Right-wing root (97% confidence) attracted 55.6% Left-wing replies
+- **High aggression:** Mean 0.386, max 1.353 → perfect for backfire effect testing
+- **Perfect DNA coverage:** 100% of users have political_label, emotion, hate_score
+- **Real temporal dynamics:** 2.5 hours of back-and-forth allows modeling reply cascades
+
+### Agent DNA Composition
+
+**Political Distribution:**
+- Left: 94 agents (55.6%) | Avg confidence: 0.830
+- Right: 73 agents (43.2%) | Avg confidence: 0.901
+- Center: 2 agents (1.2%) | Avg confidence: 0.853
+
+**Emotional/Sentiment Profiles:**
+- Emotion: 92.3% joy (tribal political schadenfreude)
+- Sentiment: 84.6% negative (attacking/critical tone)
+- **Interpretation:** "Joy" in political context often means in-group celebration while attacking out-group → explains negative sentiment
+
+**Aggression Metrics:**
+- Mean hate score: 0.118
+- Mean offensive score: 0.268
+- **Mean total aggression:** 0.386 (hate + offensive)
+- Max aggression: 1.353 (some highly hostile users)
+
+**Engagement Patterns:**
+- Total tweets from these users: 532
+- Total views: 104,764
+- Avg tweets/user: 3.1 (active participants, not one-off commenters)
+- Avg views/user: 619.9
+
+### Output Schema: `agents_for_tweet.csv`
+
+**Columns:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | int | Unique Twitter user identifier |
+| `tweet_count` | int | Total tweets posted by user in chunk 1 |
+| `view_count` | int | Total views across all user's tweets |
+| `reply_count` | int | Total replies received |
+| `political_label` | str | Left/Center/Right |
+| `political_score` | float | Model confidence [0,1] |
+| `emotion_label` | str | Dominant emotion (joy, anger, etc.) |
+| `emotion_score` | float | Emotion confidence [0,1] |
+| `sentiment_label` | str | positive/negative/neutral |
+| `sentiment_score` | float | Sentiment confidence [0,1] |
+| `hate_score` | float | Hate speech likelihood [0,1] |
+| `offensive_score` | float | Offensive language likelihood [0,1] |
+| `role` | str | 'root' or 'active' |
+
+**Role Column:**
+- **root:** The original tweet author (1 agent)
+- **active:** Users who replied to the thread (168 agents)
+
+### Scientific Insights
+
+**1. Ideological Asymmetry:**
+- Root is Right-wing (97% confidence), but thread is Left-majority (55.6%)
+- This suggests Left-wing users are more likely to **engage in cross-partisan arguments**
+- Right-wing users may prefer echo chambers or quote-tweeting to separate threads
+
+**2. Joy + Negative Paradox:**
+- 92.3% express "joy" emotion, but 84.6% have negative sentiment
+- **Interpretation:** Users feel in-group satisfaction (joy) while attacking out-group (negative)
+- This is **schadenfreude** or **righteous indignation** - key emotions in political polarization
+
+**3. Moderate Aggression:**
+- Mean aggression 0.386 is moderate, not extreme
+- Max 1.353 shows some very hostile users exist
+- **Implication:** Most discourse is passionate but not explicitly hateful; backfire effects can occur without hate speech
+
+**4. Active vs Lurker Ratio Problem:**
+- View count metadata shows only 12 views, clearly incorrect
+- Cannot use 90-9-1 rule to spawn lurkers from this thread
+- **Solution:** Will need to spawn lurkers using Pew 2024 distributions independently of view count
+
+### Limitations & Workarounds
+
+**Limitation 1: No Lurker View Count**
+- Twitter's metadata shows 12 views for a 183-reply thread (impossible)
+- Cannot spawn lurkers based on actual exposure
+
+**Workaround:**
+- Spawn lurkers using **Pew 2024 national political distributions** (52% Dem, 43% Rep, 5% Ind)
+- Use a fixed lurker:active ratio (e.g., 10:1 or 100:1) based on literature, not view counts
+- **Justification:** We're testing *mechanism* (bounded confidence, backfire) not exact population
+
+**Limitation 2: Missing Expected Replies Metadata**
+- Root tweet metadata claims 1 expected reply, but has 183 actual replies
+- Cannot validate simulation by comparing to "ground truth" total reply count
+
+**Workaround:**
+- **Phase 1 validation:** Do simulated agents match the DNA distribution of actual replies?
+- **Phase 2 validation:** Use cross-model Turing test (can classifier distinguish real vs simulated threads?)
+
+### Updated ABM Initialization Plan
+
+**Active Agents (169):**
+- All users from `agents_for_tweet.csv`
+- Initialize with their actual DNA (political_label, emotion, hate_score, etc.)
+- Root agent posts at t=0, reply agents post at their observed timestamps
+
+**Lurker Agents (TBD - Need to Choose Ratio):**
+- Option A: 1,690 lurkers (10:1 ratio) - fast testing
+- Option B: 16,900 lurkers (100:1 ratio) - realistic social media
+- Option C: 169,000 lurkers (1000:1 ratio) - full 90-9-1 rule simulation
+
+**Spawn using Pew 2024:**
+- 52% Left (Democratic-leaning)
+- 43% Right (Republican-leaning)
+- 5% Center (Independent/no lean)
+
+**Next Steps:**
+1. Decide lurker:active ratio based on computational constraints
+2. Build Mesa ABM with Active (169) + Lurker (N) agents
+3. Implement bounded confidence and backfire effect update rules
+4. Run Historical Replay: inject 184 tweets at their timestamps, simulate lurker conversions
