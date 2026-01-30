@@ -1,0 +1,41 @@
+target_tweet_id: 1801016461601001478
+auto_select:
+  method: most_actual_replies
+  min_replies: 10
+  require_root: true
+paths:
+  raw_tweets: data/may_july_chunk_1.csv
+  agent_dna: output/processed_agents_raw_1_political.csv
+  thread_metadata: output/selected_thread_metadata.json
+  thread_tweets: output/selected_thread_tweets.csv
+  thread_user_ids: output/selected_thread_user_ids.txt
+  agents_for_thread: output/agents_for_tweet.csv
+  pipeline_log: output/pipeline_log.txt
+abm:
+  lurker_ratio: 10
+  lurker_dist_strategy: match_active_agents
+  pew_2024_dist:
+    Left: 0.52
+    Right: 0.43
+    Center: 0.05
+  bounded_confidence_threshold: 0.3
+  backfire_threshold: 0.6
+  backfire_aggression_min: 0.7
+thread_info:
+  root_tweet_id: 1801016461601001478
+  root_user_id: 2655242439
+  conversation_id: 1801003427423547904
+  timestamp: '2024-06-12T22:19:20'
+  actual_replies: 183
+  unique_users: 169
+  duration_seconds: 8968
+  dna_coverage_percent: 91.84782608695652
+active_agents_dist:
+  Left: 94
+  Right: 73
+  Center: 2
+lurker_agents_dist:
+  Left: 0.5562130177514792
+  Right: 0.4319526627218935
+  Center: 0.011834319526627219
+last_run: '2026-01-30T16:44:28.254094'

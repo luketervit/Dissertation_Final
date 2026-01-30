@@ -42,6 +42,46 @@ All tweets sorted by epoch (timestamp) in `output/best_thread_tweets.csv`
 - Will spawn using Pew 2024 political distributions
 
 **Total Agents:** 450,132 (1 root author + 4 actives + 450,127 lurkers)
+
+---
+
+## Config-Driven Pipeline System (COMPLETED)
+
+**What:** Automated the entire thread extraction pipeline with YAML configuration.
+
+**Files:**
+- `config/thread_config.yaml` - Editable parameters
+- `scripts/run_thread_pipeline.py` - Single-command execution
+
+**Usage:**
+```bash
+# Edit config to select thread
+vim config/thread_config.yaml
+
+# Run complete pipeline
+python scripts/run_thread_pipeline.py
+
+# Output files auto-generated:
+# - selected_thread_metadata.json (temporal events)
+# - selected_thread_tweets.csv
+# - agents_for_tweet.csv (DNA profiles)
+```
+
+**Key Features:**
+1. **Auto-selection:** Can find best thread automatically
+2. **Temporal events:** Sorted timeline for minute-by-minute replay
+3. **Lurker distribution:** Configurable (match_active_agents or pew_2024)
+4. **Reproducibility:** Config tracks all parameters + auto-updates with metadata
+
+**Current Thread (Final Selection):**
+- Tweet: 1801016461601001478 (Pelosi/MTG Jan 6 debate)
+- Replies: 183 actual (was 4 in Warren tweet)
+- Users: 169 unique (100% DNA coverage)
+- Duration: 2h 29min (8,968 seconds)
+- Political: 55.6% Left, 43.2% Right, 1.2% Center
+- Lurker strategy: match_active_agents
+
+---
 2. Categorical Agent Architecture
 
 We will not use a single float. We will use raw categorical labels and confidence scores to drive behavior.

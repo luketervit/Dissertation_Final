@@ -571,13 +571,123 @@ into their own hands. Literally."
 - Option B: 16,900 lurkers (100:1 ratio) - realistic social media
 - Option C: 169,000 lurkers (1000:1 ratio) - full 90-9-1 rule simulation
 
-**Spawn using Pew 2024:**
-- 52% Left (Democratic-leaning)
-- 43% Right (Republican-leaning)
-- 5% Center (Independent/no lean)
+**Lurker Political Distribution Strategy:**
+
+**Current Approach: Match Active Agents**
+- Lurkers spawn with the **same political distribution** as active participants
+- For this thread: 55.6% Left, 43.2% Right, 1.2% Center
+- **Rationale:** Self-selection bias - users who view this thread likely have similar political leanings to those who engage
+- **Assumption:** Lurkers and active users are drawn from the same underlying population
+
+**Limitations & Future Work:**
+- **Likely Unrealistic:** Research shows lurkers may be more moderate, less partisan, or have different demographics than active users
+- **No Empirical Data:** We don't have ground truth for lurker political distributions on Twitter
+- **Self-Selection Unknown:** We don't know if lurkers self-select into threads matching their ideology or seek out opposing views
+- **Alternative Hypothesis:** Lurkers could be more centrist (less motivated to engage), or more extreme (afraid to expose views)
+
+**Future Research Needed:**
+- Survey studies of lurker political identities
+- Platform data on view patterns by political affiliation
+- Comparison of lurker vs active demographics in political discourse
+- A/B testing different lurker distributions in ABM to test sensitivity
+
+**Alternative Strategy (Not Currently Used):**
+- **Pew 2024 National Distributions:** 52% Left, 43% Right, 5% Center
+- **Pros:** Represents general U.S. population, not self-selected sample
+- **Cons:** Assumes all Americans equally likely to view this thread (unrealistic)
 
 **Next Steps:**
 1. Decide lurker:active ratio based on computational constraints
 2. Build Mesa ABM with Active (169) + Lurker (N) agents
 3. Implement bounded confidence and backfire effect update rules
 4. Run Historical Replay: inject 184 tweets at their timestamps, simulate lurker conversions
+
+---
+
+## Step 4: Config-Driven Pipeline System (`config/thread_config.yaml` + `scripts/run_thread_pipeline.py`)
+
+### Design Decision: Reproducible, Configurable Experimentation
+
+**What:** Created a YAML-based configuration system that allows running the entire thread extraction pipeline with a single command.
+
+**Why:**
+- **Reproducibility:** Document exact parameters used for each experiment
+- **Experimentation:** Easy to test different threads by changing one line
+- **Automation:** Single script replaces 3 manual steps (find → extract → match)
+- **Version Control:** Config files can be committed to track experimental setups
+
+**System Architecture:**
+```
+config/thread_config.yaml  (edit parameters)
+         ↓
+scripts/run_thread_pipeline.py  (run once)
+         ↓
+output/
+  ├── selected_thread_metadata.json  (temporal events)
+  ├── selected_thread_tweets.csv     (full data)
+  ├── agents_for_tweet.csv           (DNA profiles)
+  └── pipeline_log.txt               (execution log)
+```
+
+### Configuration Schema
+
+**Thread Selection:**
+```yaml
+target_tweet_id: 1801016461601001478  # Or null for auto-select
+auto_select:
+  method: "most_actual_replies"  # or "highest_views", "best_coverage"
+  min_replies: 10
+  require_root: true
+```
+
+**ABM Parameters:**
+```yaml
+abm:
+  lurker_ratio: 10  # 10 lurkers per active agent
+  lurker_dist_strategy: "match_active_agents"  # or "pew_2024"
+  bounded_confidence_threshold: 0.3
+  backfire_threshold: 0.6
+```
+
+### Temporal Event Structure
+
+**Innovation:** Added `temporal_events` array to metadata for minute-by-minute simulation replay.
+
+**Structure:**
+```json
+{
+  "temporal_events": [
+    {
+      "tweet_id": 1801003665106301138,
+      "user_id": 803029401269129216,
+      "timestamp": "2024-06-12T21:28:29",
+      "epoch": 1718232509,
+      "seconds_since_start": 0,
+      "is_root": false,
+      "text": "@RepMTG Sadly the GOP will back down..."
+    }
+  ]
+}
+```
+
+**Usage in ABM:** Step through events chronologically, inject tweets at their observed timestamps, update lurker states.
+
+### Pipeline Workflow
+
+**Input:**
+1. `data/may_july_chunk_1.csv` (raw tweets)
+2. `output/processed_agents_raw_1_political.csv` (DNA profiles)
+3. `config/thread_config.yaml` (parameters)
+
+**Output:**
+1. `selected_thread_metadata.json` - Full metadata + temporal events (184 events over 8,968 seconds)
+2. `selected_thread_tweets.csv` - All tweets with timestamps
+3. `agents_for_tweet.csv` - 169 agent DNA profiles (55.6% Left, 43.2% Right)
+4. Updated `thread_config.yaml` with run metadata
+
+### Reproducibility Benefits
+
+**Before:** 3 manual scripts, no parameter tracking  
+**After:** 1 command, config auto-documents parameters, git tracks changes
+
+**Time Savings:** 10 minutes → 30 seconds per experiment
