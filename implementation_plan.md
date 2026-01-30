@@ -82,7 +82,251 @@ python scripts/run_thread_pipeline.py
 - Lurker strategy: match_active_agents
 
 ---
-2. Categorical Agent Architecture
+
+## LLM-Powered Thread Simulation (COMPLETED)
+
+**What:** Implemented Mesa-based ABM where agents generate authentic text responses using Claude Haiku API, simulating realistic conversation dynamics within a Twitter thread.
+
+**Why This Approach:**
+- Initial opinion dynamics ABM had backwards causality issue (agents updating opinions after posting)
+- Template-based responses were too generic and repetitive
+- LLM integration enables context-aware, persona-driven conversational realism
+- Aligns with dissertation goal: understand how political discourse unfolds in real-time
+
+**Architecture:**
+
+### Two-Stage Activation System
+Mesa 3.x doesn't support `StagedActivation`, so implemented manual staging:
+
+**Stage 1 (step):** All agents read thread, decide if/how to reply, generate text
+**Stage 2 (advance):** All agents commit replies simultaneously to thread history
+
+This prevents race conditions where early agents see later agents' posts from same round.
+
+### Agent Behavior Logic
+
+**ThreadAgent DNA:**
+- `political_label` (Left/Center/Right)
+- `political_score` (confidence)
+- `emotion_label` (joy, anger, etc.)
+- `aggression` = `hate_score + offensive_score`
+
+**Reply Probability (Per Round):**
+```python
+base_prob = 0.05  # 5% baseline
+aggression_boost = self.aggression * 0.15
+reply_prob = min(0.25, base_prob + aggression_boost)  # Max 25%
+```
+
+Aggressive agents reply more frequently, moderate agents are selective.
+
+**Target Selection (Weighted Sampling):**
+- **Recency:** Posts from current/previous round get 3x weight
+- **Controversy:** Opposing political views boost weight (especially for aggressive agents)
+- **Depth Penalty:** Posts at depth >5 get 0.5x weight to avoid super-deep threads
+
+### LLM Integration
+
+**Provider:** Anthropic Claude Haiku (`claude-haiku-4-5-20251001`)
+
+**Rationale:**
+- Fast: ~1-2s per generation
+- Cheap: $0.25/$1.25 per million tokens (in/out)
+- High-quality: Contextually aware, persona-driven responses
+- Cost estimate: $0.10-0.30 per 10-round simulation
+
+**Configuration (`config/thread_config.yaml`):**
+```yaml
+llm:
+  provider: anthropic
+  model: claude-haiku-4-5-20251001
+  api_key_env: ANTHROPIC_API_KEY
+  temperature: 0.8  # Balance creativity vs consistency
+  max_tokens: 150   # Twitter-length replies
+```
+
+**API Key Management:**
+- Stored in `.env` file at project root (gitignored)
+- Loaded via `python-dotenv` in `sim/llm_generator.py`
+- Never hardcoded in source code
+
+### Prompt Engineering
+
+**System Prompt:**
+```
+You are a Twitter user engaging in political discourse. You have your own
+political views and emotional tendencies. Generate realistic, concise replies
+that reflect your persona while staying on-topic and authentic to how real
+people argue online.
+```
+
+**User Prompt Structure:**
+```
+Your persona:
+- Political leaning: {Left/Right/Center}
+- Aggression level: {0.0-1.0}
+- Current emotion: {joy/anger/etc.}
+
+Thread context (last 10 posts):
+[Recent conversation history...]
+
+You are replying to:
+"{target_post_text}"
+
+Generate a short, authentic Twitter reply (1-3 sentences) that reflects
+your political views and emotional state. Be opinionated but realistic.
+```
+
+**Why This Works:**
+- Combines agent personality with thread context
+- Short context window (10 posts) keeps costs low
+- Explicit persona description guides tone and content
+- Encourages realistic disagreement without toxic templates
+
+### Output Format Matching
+
+**Goal:** Simulation output matches `selected_thread_metadata.json` structure for interoperability.
+
+**Key Sections:**
+1. `root_tweet` - Base tweet that starts the thread
+2. `replies` - All generated responses with IDs, user IDs, timestamps
+3. `temporal_events` - Chronologically sorted array with:
+   - `seconds_since_start` (round * 60)
+   - `is_root` flag
+   - Full text content
+4. `simulation_info` - LLM provider, model, agent counts, max depth
+
+**Files Generated:**
+- `output/simulated_thread_metadata.json` - Full structured output
+- `output/thread_history.json` - Simple post array for debugging
+- `output/summary_stats.txt` - Political distribution, aggression stats
+- `output/simulation_timeseries.csv` - Round-by-round metrics
+
+### Implementation Files
+
+**Core Modules:**
+- `sim/thread_simulation.py` - ThreadAgent, ThreadModel, staging logic
+- `sim/llm_generator.py` - Multi-provider LLM wrapper (Anthropic/OpenAI/Ollama)
+- `config/thread_config.yaml` - Central configuration
+- `.env` - API keys (not committed)
+
+**Usage:**
+```bash
+# Setup
+cp .env.example .env
+# Add ANTHROPIC_API_KEY=your-key-here to .env
+
+# Run simulation
+python sim/thread_simulation.py
+
+# Output appears in output/
+```
+
+### Mesa 3.x Compatibility Fixes
+
+**Problem 1:** `ModuleNotFoundError: No module named 'mesa.time'`
+**Fix:** Removed `BaseScheduler`, use `Model.agents` directly + manual staging
+
+**Problem 2:** `Agent.__init__()` signature changed
+**Fix:** Changed from `super().__init__(unique_id, model)` to `super().__init__(model)`, set `self.unique_id` manually
+
+**Problem 3:** No `StagedActivation` in Mesa 3.x
+**Fix:** Implemented manual two-stage loop in `ThreadModel.step()`:
+```python
+def step(self):
+    for agent in self.agent_list:
+        agent.step()  # Stage 1: Generate
+    for agent in self.agent_list:
+        agent.advance()  # Stage 2: Commit
+```
+
+### Validation Approach
+
+**Political Distribution Check:**
+- Compare simulated Left/Right ratio to input agent distribution
+- Verify reply political balance matches active agent demographics
+
+**Engagement Metrics:**
+- Track replies per round, max depth, political polarization over time
+- Compare to real thread patterns (if available)
+
+**Content Quality (Manual):**
+- Sample 20-30 generated replies
+- Check for: on-topic responses, persona consistency, conversational coherence
+- Flag any generic/nonsensical outputs
+
+**Cost Tracking:**
+- Log total API calls, estimated token usage
+- Verify cost estimates align with actual usage
+
+### Known Limitations
+
+1. **No Real Timestamps:** Uses `round * 60` seconds as synthetic timeline (future: map rounds to actual minutes)
+2. **Fixed Reply Probability:** 5-25% may not match real engagement curves (future: dynamic probability based on thread virality)
+3. **Limited Context Window:** Only last 10 posts provided to LLM (tradeoff: cost vs. accuracy)
+4. **No Lurker Activation:** Current implementation only simulates active agent conversations (future: integrate with lurker opinion dynamics ABM)
+5. **Single-Thread Focus:** Doesn't model cross-thread influence or user history persistence
+6. **API Rate Limits:** Anthropic has rate limits; large simulations (500+ agents, 50+ rounds) may need batching
+7. **Model Determinism:** Temperature=0.8 means repeated runs produce different outputs (reproducibility requires seed control)
+
+### Next Steps for Integration
+
+**Phase 1: Standalone Thread Simulation** (COMPLETED)
+- ✓ LLM-powered agent responses
+- ✓ Staged activation preventing race conditions
+- ✓ Output format matching real thread metadata
+
+**Phase 2: Opinion Dynamics Integration** (FUTURE)
+- Combine thread simulation with lurker opinion shift model
+- Active agents post LLM-generated text → Lurkers update latent opinions
+- Track "Ghost Shift" in silent majority based on simulated discourse
+
+**Phase 3: Historical Replay Validation** (FUTURE)
+- Use real thread as Phase 1 playback
+- Simulate Phase 2 continuation with LLM agents
+- Compare simulated activity patterns to real Phase 2 data
+
+**Phase 4: Cross-Model Validation** (FUTURE)
+- Extract thread signatures from simulated output
+- Train classifier on real vs. simulated discourse
+- Target: >80% "real thread" classification confidence
+
+### IMPORTANT: Current Status & Future Refinements
+
+**Current Implementation Status:** PROTOTYPE/MVP for testing LLM integration approach
+
+**Known Limitations Requiring Redesign:**
+
+1. **Timeline Mismatch:**
+   - Current: Simulates in abstract "rounds" (10 rounds = 10 minutes simulated time)
+   - Needed: Real 24-hour timeline matching actual thread duration
+   - Issue: Reply probability and agent activation need temporal calibration
+
+2. **Missing Lurker Integration:**
+   - Current: Only active agents participate (no lurker opinion dynamics)
+   - Needed: 90-9-1 Rule implementation with lurker agents tracking latent opinion shift
+   - Issue: This is the core dissertation question (Ghost Shift) but not yet implemented
+
+3. **Model Selection Not Finalized:**
+   - Current: Using Claude Haiku (Anthropic API, paid)
+   - Needed: Test local models (Llama 3, Mistral, etc.) for cost/quality tradeoff
+   - Issue: API costs scale with simulation size; local inference may be required for 100k+ lurker simulations
+
+4. **Agent Behavior Needs Calibration:**
+   - Current: 5-25% reply probability is arbitrary
+   - Needed: Calibrate against real engagement patterns in USC dataset
+   - Issue: May need dynamic probability based on thread virality, time decay, etc.
+
+**Next Implementation Phase:**
+- Integrate lurker opinion dynamics from `sim/agents.py` with thread simulation
+- Implement 24-hour timeline replay matching real thread timestamps
+- Test local LLM alternatives (Ollama + Llama 3.3 70B or Mistral Large)
+- Calibrate agent parameters against real thread engagement metrics
+- Run sensitivity analysis on reply probability, aggression thresholds, context window size
+
+---
+
+## 2. Categorical Agent Architecture
 
 We will not use a single float. We will use raw categorical labels and confidence scores to drive behavior.
 

@@ -12,7 +12,7 @@ paths:
   agents_for_thread: output/agents_for_tweet.csv
   pipeline_log: output/pipeline_log.txt
 abm:
-  lurker_ratio: 10
+  lurker_ratio: 0
   lurker_dist_strategy: match_active_agents
   pew_2024_dist:
     Left: 0.52
@@ -21,6 +21,15 @@ abm:
   bounded_confidence_threshold: 0.3
   backfire_threshold: 0.6
   backfire_aggression_min: 0.7
+llm:
+  provider: anthropic
+  model: claude-haiku-4-5-20251001
+  api_key_env: ANTHROPIC_API_KEY
+  temperature: 0.8
+  max_tokens: 150
+  system_prompt: 'You are a Twitter user engaging in political discourse. Stay in
+    character based on your political leaning and personality. Keep responses concise
+    (1-3 sentences, under 280 characters). Be authentic and conversational.'
 thread_info:
   root_tweet_id: 1801016461601001478
   root_user_id: 2655242439
