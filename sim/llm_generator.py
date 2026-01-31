@@ -170,9 +170,22 @@ Write your reply (1-3 sentences, under 280 characters). Stay in character:"""
                     "prompt": f"{self.system_prompt}\n\n{prompt}",
                     "temperature": self.temperature,
                     "stream": False
-                }
+                },
+                timeout=60  # 60 second timeout
             )
-            return response.json()['response'].strip()
+            if response.status_code != 200:
+                print(f"Ollama HTTP error {response.status_code}: {response.text}")
+                return "[Error generating response]"
+
+            result = response.json()
+            if 'response' not in result:
+                print(f"Ollama response missing 'response' field: {result}")
+                return "[Error generating response]"
+
+            return result['response'].strip()
+        except requests.exceptions.Timeout:
+            print(f"Ollama timeout after 60s - model may be too slow")
+            return "[Timeout]"
         except Exception as e:
             print(f"Ollama error: {e}")
             return f"[Error generating response]"

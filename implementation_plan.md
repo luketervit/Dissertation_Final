@@ -127,28 +127,57 @@ Aggressive agents reply more frequently, moderate agents are selective.
 
 ### LLM Integration
 
-**Provider:** Anthropic Claude Haiku (`claude-haiku-4-5-20251001`)
+**Initial Model: Claude Haiku (REPLACED)**
+- Provider: Anthropic API
+- Model: `claude-haiku-4-5-20251001`
+- Issue: Too polite (84.8% positive vs real 5.4%)
+- Validation: 74.1% accuracy (GOOD), JSD=0.370
+- **Reason for change:** Safety filters prevented realistic negative sentiment
+
+**Current Model: Dolphin-Llama3 8B (SELECTED)**
+
+**Provider:** Ollama (local inference)
+
+**Model:** `dolphin-llama3:8b` (Dolphin 2.9 by Eric Hartford)
 
 **Rationale:**
-- Fast: ~1-2s per generation
-- Cheap: $0.25/$1.25 per million tokens (in/out)
-- High-quality: Contextually aware, persona-driven responses
-- Cost estimate: $0.10-0.30 per 10-round simulation
+- **Uncensored:** No safety filters blocking negative/aggressive language
+- **Free:** Runs locally, unlimited iterations for parameter tuning
+- **Realistic:** Produces authentic Twitter discourse tone (39.8% negative vs Claude's 12%)
+- **Validated:** 93.5% accuracy (EXCELLENT), JSD=0.093 (4x better than Claude)
+- Speed: ~3-5s per generation (CPU) - slower but worth it for quality
+
+**Validation Results:**
+
+| Metric | Real Thread | Dolphin | Claude | Winner |
+|--------|-------------|---------|--------|--------|
+| Negative Sentiment | 78.8% | 39.8% | 12.0% | **Dolphin** |
+| Sentiment Similarity | - | 90.7% | 63.0% | **Dolphin** |
+| Overall Accuracy | - | 93.5% | 74.1% | **Dolphin** |
+| JSD | - | 0.093 | 0.370 | **Dolphin** |
+| Rating | - | EXCELLENT | GOOD | **Dolphin** |
 
 **Configuration (`config/thread_config.yaml`):**
 ```yaml
 llm:
-  provider: anthropic
-  model: claude-haiku-4-5-20251001
-  api_key_env: ANTHROPIC_API_KEY
-  temperature: 0.8  # Balance creativity vs consistency
-  max_tokens: 150   # Twitter-length replies
+  provider: ollama
+  model: dolphin-llama3:8b
+  api_key_env: null  # Not needed for local
+  temperature: 1.1   # Higher for more varied/edgy responses
+  max_tokens: 150    # Twitter-length replies
 ```
 
-**API Key Management:**
-- Stored in `.env` file at project root (gitignored)
-- Loaded via `python-dotenv` in `sim/llm_generator.py`
-- Never hardcoded in source code
+**Setup:**
+```bash
+# Install Ollama
+brew install ollama
+
+# Start service
+brew services start ollama
+
+# Pull model (~5GB download)
+ollama pull dolphin-llama3:8b
+```
 
 ### Prompt Engineering
 
@@ -293,24 +322,54 @@ def step(self):
 
 ### IMPORTANT: Current Status & Future Refinements
 
-**Current Implementation Status:** PROTOTYPE/MVP for testing LLM integration approach
+**Current Implementation Status:** VALIDATED PROTOTYPE with 93.5% accuracy (EXCELLENT rating)
 
-**Known Limitations Requiring Redesign:**
+**Completed Achievements:**
 
-1. **Timeline Mismatch:**
+1. ✓ **Model Selection Finalized:**
+   - Tested: Claude Haiku (API) vs Dolphin-Llama3 8B (local)
+   - Winner: Dolphin-Llama3 8B (93.5% accuracy, free, uncensored)
+   - Validation: JSD=0.093 (4x better than Claude's 0.370)
+   - Sentiment realism: 39.8% negative (vs Claude's 12%, real 78.8%)
+
+2. ✓ **Gold-Standard Validation Framework:**
+   - Implemented automated validation with Jensen-Shannon Divergence
+   - Sentiment analysis using CardiffNLP Twitter-RoBERTa
+   - Keyword drift detection comparing real vs simulated negative discourse
+   - Visualization and JSON output for reproducibility
+   - ⚠️ **LIMITATION:** Validated on only ONE thread (Pelosi/MTG, 78.8% negative)
+   - **Required:** Cross-thread validation on 5-10 diverse threads before claiming generalization
+
+3. ✓ **Progress Monitoring:**
+   - Added round-by-round progress updates
+   - Stage-by-stage (generate vs commit) visibility
+   - Reply count tracking during generation
+
+**Remaining Limitations Requiring Redesign:**
+
+1. **⚠️ Single-Thread Validation (CRITICAL):**
+   - Current: Tested on only ONE thread (Pelosi/MTG Jan 6 debate)
+   - Issue: **Cannot claim model generalizes** without cross-thread validation
+   - **Required:** Test on 5-10 diverse threads (varying sentiment, topics, polarization)
+   - **Risk:** Parameters may be overfit to this specific highly-negative partisan thread
+   - **Timeline:** ~5 hours for 10-thread cross-validation
+   - **This is required for dissertation defense**
+
+2. **Sentiment Gap:**
+   - Current: 39.8% negative (Dolphin)
+   - Target: 78.8% negative (real thread on this one thread)
+   - Issue: Still too positive/polite compared to real Twitter toxicity
+   - **Next Step:** Test Dolphin 70B or adjust system prompt for more aggression
+
+2. **Timeline Mismatch:**
    - Current: Simulates in abstract "rounds" (10 rounds = 10 minutes simulated time)
    - Needed: Real 24-hour timeline matching actual thread duration
    - Issue: Reply probability and agent activation need temporal calibration
 
-2. **Missing Lurker Integration:**
+3. **Missing Lurker Integration:**
    - Current: Only active agents participate (no lurker opinion dynamics)
    - Needed: 90-9-1 Rule implementation with lurker agents tracking latent opinion shift
    - Issue: This is the core dissertation question (Ghost Shift) but not yet implemented
-
-3. **Model Selection Not Finalized:**
-   - Current: Using Claude Haiku (Anthropic API, paid)
-   - Needed: Test local models (Llama 3, Mistral, etc.) for cost/quality tradeoff
-   - Issue: API costs scale with simulation size; local inference may be required for 100k+ lurker simulations
 
 4. **Agent Behavior Needs Calibration:**
    - Current: 5-25% reply probability is arbitrary
@@ -318,11 +377,11 @@ def step(self):
    - Issue: May need dynamic probability based on thread virality, time decay, etc.
 
 **Next Implementation Phase:**
+- **Priority 1:** Test Dolphin 70B or adjust prompt to close sentiment gap (78.8% → 39.8%)
 - Integrate lurker opinion dynamics from `sim/agents.py` with thread simulation
 - Implement 24-hour timeline replay matching real thread timestamps
-- Test local LLM alternatives (Ollama + Llama 3.3 70B or Mistral Large)
 - Calibrate agent parameters against real thread engagement metrics
-- Run sensitivity analysis on reply probability, aggression thresholds, context window size
+- Run sensitivity analysis on temperature, reply_prob, aggression_threshold
 
 ---
 

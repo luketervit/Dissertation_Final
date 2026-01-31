@@ -22,10 +22,10 @@ abm:
   backfire_threshold: 0.6
   backfire_aggression_min: 0.7
 llm:
-  provider: anthropic
-  model: claude-haiku-4-5-20251001
-  api_key_env: ANTHROPIC_API_KEY
-  temperature: 0.8
+  provider: ollama
+  model: dolphin-llama3:8b
+  api_key_env: null
+  temperature: 1.1
   max_tokens: 150
   system_prompt: 'You are a Twitter user engaging in political discourse. Stay in
     character based on your political leaning and personality. Keep responses concise

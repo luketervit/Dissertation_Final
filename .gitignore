@@ -38,3 +38,6 @@ models/cache/
 .DS_Store
 Thumbs.db
 .env
+
+# Archive (old/deprecated code)
+archive/

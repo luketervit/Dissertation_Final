@@ -297,9 +297,21 @@ class ThreadModel(Model):
         Stage 1: All agents generate replies
         Stage 2: All agents commit replies simultaneously
         """
+        print(f"\n  → Stage 1: Agents reading thread and generating replies...")
+
         # Stage 1: Generate replies (read thread, decide what to say)
-        for agent in self.agent_list:
+        replies_generated = 0
+        for i, agent in enumerate(self.agent_list):
             agent.step()
+
+            # Count if agent generated a reply
+            if agent.pending_reply is not None:
+                replies_generated += 1
+                # Show progress every 5 replies
+                if replies_generated % 5 == 0:
+                    print(f"    Generated {replies_generated} replies so far...")
+
+        print(f"  → Stage 2: Committing {replies_generated} replies to thread...")
 
         # Stage 2: Commit replies (add to thread simultaneously)
         for agent in self.agent_list:
@@ -320,10 +332,14 @@ class ThreadModel(Model):
         print(f"{'='*80}")
 
         for round_num in range(max_rounds):
+            print(f"\n{'─'*80}")
+            print(f"ROUND {round_num + 1}/{max_rounds}")
+            print(f"{'─'*80}")
+
             self.step()
 
             posts_this_round = sum(1 for p in self.thread_history if p['round'] == round_num)
-            print(f"  Round {round_num + 1}/{max_rounds}: {posts_this_round} new posts | "
+            print(f"\n✓ Round {round_num + 1} complete: {posts_this_round} new posts | "
                   f"Total: {len(self.thread_history)} | "
                   f"Max depth: {max([p['depth'] for p in self.thread_history])}")
 
