@@ -132,10 +132,10 @@ class ThreadAgent(Agent):
             )
 
             # Aggressive agents seek out opposing views
-            if self.aggression > 0.5 and political_distance > 0.5:
-                weight *= 2.5
+            if self.aggression > 0.5 and political_distance > 0.5:  # Original baseline
+                weight *= 2.5  # Original baseline controversy weight
             # Moderate agents avoid extreme disagreement
-            elif self.aggression < 0.3 and political_distance > 0.6:
+            elif self.aggression < 0.3 and political_distance > 0.6:  # Original baseline
                 weight *= 0.3
             # Everyone likes some controversy
             else:

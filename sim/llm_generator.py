@@ -92,10 +92,10 @@ class LLMGenerator:
         aggression = agent_persona['aggression']
         emotion = agent_persona['emotion']
 
-        # Personality description
-        if aggression > 0.7:
+        # Personality description (CONSERVATIVE DEFAULTS for generalization)
+        if aggression > 0.5:  # Original baseline threshold
             tone = "aggressive and confrontational"
-        elif aggression > 0.4:
+        elif aggression > 0.3:  # Original baseline threshold
             tone = "assertive and direct"
         else:
             tone = "polite and measured"
