@@ -28,9 +28,12 @@ if len(sys.argv) < 2:
 
 CHUNK_NUM = sys.argv[1]
 INPUT_FILE = f'data/may_july_chunk_{CHUNK_NUM}.csv'
-OUTPUT_FILE = f'output/processed_agents_raw_{CHUNK_NUM}.csv'
-CHECKPOINT_FILE = f'output/checkpoint_chunk_{CHUNK_NUM}.json'
+OUTPUT_FILE = f'processed_agents/processed_agents_chunk_{CHUNK_NUM}.csv'
+CHECKPOINT_FILE = f'processed_agents/checkpoint_chunk_{CHUNK_NUM}.json'
 CHECKPOINT_INTERVAL = 1000  # Save every 1000 tweets
+
+# Ensure output directory exists
+os.makedirs('processed_agents', exist_ok=True)
 
 print(f"Processing: {INPUT_FILE}")
 print(f"Output will be saved to: {OUTPUT_FILE}")

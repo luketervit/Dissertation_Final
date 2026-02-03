@@ -23,6 +23,9 @@ dist/
 output/*
 !output/.gitkeep
 
+# Processed agent data
+processed_agents/
+
 # Model cache
 models/cache/
 *.pt

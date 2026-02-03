@@ -1,6 +1,6 @@
 """
 Create agent DNA profiles for the selected thread.
-Matches thread user IDs with processed_agents_raw_1_political.csv
+Matches thread user IDs with processed_agents_chunk_1.csv
 and outputs a clean CSV with all DNA features for ABM initialization.
 """
 import pandas as pd
@@ -25,7 +25,7 @@ print(f"  - Reply users: {len(reply_user_ids)}")
 
 # Load processed agents DNA
 print("\nLoading agent DNA profiles...")
-agents_df = pd.read_csv('output/processed_agents_raw_1_political.csv')
+agents_df = pd.read_csv('processed_agents/processed_agents_chunk_1.csv')
 print(f"✓ Loaded {len(agents_df):,} agent profiles")
 
 # Filter to only thread participants
