@@ -1,0 +1,17 @@
+{
+  "root_tweet": {
+    "id": "1824554477870842112",
+    "conversation_id": "1824554477870842112",
+    "user_id": "unknown",
+    "text": "Since Harris took office:\n\nCar insurance is up 54%\nHotels are up 51.2%\nGas is up 50.5%\nFuel oil is u",
+    "expected_replies": 969
+  },
+  "replies": {
+    "actual_count": 969,
+    "tweet_ids": []
+  },
+  "thread_structure": {
+    "max_depth": 5
+  },
+  "source": "august_thread_depths"
+}

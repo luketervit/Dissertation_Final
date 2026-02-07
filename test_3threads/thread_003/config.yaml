@@ -1,0 +1,25 @@
+target_tweet_id: '1823409351874236928'
+paths:
+  thread_metadata: /Users/luketervit/Desktop/Dissertation_Final/test_3threads/thread_003/thread_metadata.json
+  agents_for_thread: /Users/luketervit/Desktop/Dissertation_Final/test_3threads/thread_003/agents_for_thread.csv
+abm:
+  lurker_ratio: 0
+  lurker_dist_strategy: match_active_agents
+  bounded_confidence_threshold: 0.3
+  backfire_threshold: 0.6
+  backfire_aggression_min: 0.7
+llm:
+  provider: ollama
+  model: dolphin-llama3:8b
+  api_key_env: null
+  temperature: 0.9
+  max_tokens: 150
+thread_info:
+  root_tweet_id: '1823409351874236928'
+  internal_replies: 878
+  max_depth: 4
+  root_text: This week marks seven years since white supremacists gathered in Charlottesville
+    spouting sick, anti
+simulation:
+  max_rounds: 5
+  thread_num: 3
