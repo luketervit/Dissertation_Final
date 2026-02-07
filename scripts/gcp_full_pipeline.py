@@ -670,9 +670,13 @@ def prepare_simulations(threads_df: pd.DataFrame, agents_df: pd.DataFrame):
             pass # Skip problematic chunks
 
     print("Generating simulation files...")
-    
+
     # Reset index to ensure clean iteration, though enumerate is safer
     threads_df = threads_df.reset_index(drop=True)
+
+    # Pre-compute user_id string column for matching
+    if len(agents_df) > 0:
+        agents_df['user_id_str'] = agents_df['user_id'].astype(str)
     
     for i, row in threads_df.iterrows():
         thread_num = i + 1
@@ -681,11 +685,32 @@ def prepare_simulations(threads_df: pd.DataFrame, agents_df: pd.DataFrame):
         
         target_agents = int(row['internal_replies'])
 
-        # Sample agents
-        if len(agents_df) > 0:
-            n_agents = min(target_agents, len(agents_df))
-            thread_agents = agents_df.sample(n=n_agents, random_state=thread_num)
+        # Match REAL thread participants to classified agents pool
+        # Extract user_ids from temporal_events for this thread
+        thread_user_ids = set()
+        for t in temporal_events:
+            uid = t.get('user_id')
+            if uid and str(uid) not in ('None', 'nan', 'unknown'):
+                thread_user_ids.add(str(uid))
+
+        if thread_user_ids and len(agents_df) > 0:
+            thread_agents = agents_df[agents_df['user_id_str'].isin(thread_user_ids)].copy()
+            thread_agents = thread_agents.drop(columns=['user_id_str'])
+
+            if len(thread_agents) == 0:
+                # Fallback: sample from pool if no matches (shouldn't happen)
+                n_agents = min(target_agents, len(agents_df))
+                thread_agents = agents_df.drop(columns=['user_id_str']).sample(n=n_agents, random_state=thread_num)
+                print(f"    WARNING: No real participants matched, using {n_agents} random agents")
+            else:
+                print(f"    Matched {len(thread_agents)}/{len(thread_user_ids)} real participants")
+
             thread_agents.to_csv(thread_dir / 'agents_for_thread.csv', index=False)
+        elif len(agents_df) > 0:
+            n_agents = min(target_agents, len(agents_df))
+            thread_agents = agents_df.drop(columns=['user_id_str'], errors='ignore').sample(n=n_agents, random_state=thread_num)
+            thread_agents.to_csv(thread_dir / 'agents_for_thread.csv', index=False)
+            print(f"    WARNING: No temporal_events user_ids, using {n_agents} random agents")
 
         # Get actual tweet data from map and resolve root text
         temporal_events = thread_tweets_map.get(str(row['root_id']), [])
@@ -711,9 +736,8 @@ def prepare_simulations(threads_df: pd.DataFrame, agents_df: pd.DataFrame):
             'llm': {
                 'provider': 'ollama',
                 'model': 'dolphin-llama3:8b',
-                'temperature': 1.1,
+                'temperature': 0.9,
                 'max_tokens': 150,
-                'system_prompt': "You are a Twitter user engaging in a political discussion. Your persona: Political Leaning: {political_label}, Aggression Level: {aggression}, Emotion: {emotion}. Write a short, realistic tweet reply (under 280 chars). Do not use hashtags unless necessary. Be casual.",
             },
             'thread_info': {
                 'root_tweet_id': str(row['root_id']),
