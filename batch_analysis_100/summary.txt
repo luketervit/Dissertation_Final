@@ -1,0 +1,30 @@
+========================================================================
+  BATCH VALIDATION SUMMARY — 100 THREADS
+========================================================================
+
+  Threads analysed:  100
+  Total tweets classified:  12732
+    Real:      6528
+    Simulated: 6204
+
+  Per-Thread Metrics (mean ± std):
+    Sentiment JSD:      0.1262 ± 0.0791
+    Political JSD:      0.0168 ± 0.0210
+    Emotion JSD:        0.0895 ± 0.0710
+    Sentiment residual: -0.3865 ± 0.1915
+    Real aggression:    0.2757 ± 0.0582
+    Sim aggression:     0.3900 ± 0.0422
+    Overall accuracy:   91.6% ± 4.3%
+
+  Rating Breakdown:
+    EXCELLENT (≥80%): 98
+    GOOD (60–80%):    2
+    FAIR (40–60%):    0
+    POOR (<40%):      0
+
+  Wilcoxon Signed-Rank Test (per-thread mean sentiment, real vs sim):
+    Statistic: 1.00
+    p-value:   4.0162e-18
+    Significant (α=0.05): Yes
+
+========================================================================

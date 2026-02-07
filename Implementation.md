@@ -1919,3 +1919,233 @@ After running simulation with the fixed code:
    - Aggression mean within ±0.1 of real
    - Zero model self-identification in output
 
+---
+
+## Step 9: 100-Thread Batch Validation (`scripts/validate_batch_100.py`)
+
+### Design Decision: Comprehensive Batch Validation with Dissertation-Quality Figures
+
+**What:** A single script that classifies every tweet across all 100 simulated threads through 5 RoBERTa models, computes per-thread validation metrics, and generates 6 publication-ready figures.
+
+**Why:**
+- 2-thread validation (Step 7) was insufficient for generalization claims
+- Dissertation requires statistical evidence across a representative sample of threads
+- Need continuous sentiment scores (not just labels) for residual analysis
+- Automated pipeline ensures reproducibility and avoids manual cherry-picking
+
+### Architecture
+
+**Single-pass pipeline with checkpoint recovery:**
+1. **Classification** (~2-4h CPU, ~30min GPU): Classify all real + simulated tweets through 5 models, saving `all_tweets_classified.csv` after each thread as a checkpoint
+2. **Per-thread metrics**: Compute JSD, aggression, sentiment residuals for each of 100 threads → `per_thread_results.csv`
+3. **Figure generation**: 6 matplotlib figures at 300 DPI → `batch_analysis_100/figures/`
+4. **Summary statistics**: Wilcoxon signed-rank test, rating breakdown → `summary.txt` + `aggregate_results.json`
+
+### Continuous Sentiment Score
+
+**Innovation:** Instead of just classifying sentiment labels (positive/neutral/negative), we extract raw probabilities from `cardiffnlp/twitter-roberta-base-sentiment-latest` using `top_k=None`:
+
+```python
+sentiment_continuous = P(positive) - P(negative)  # Range: [-1, +1]
+```
+
+**Why:** Labels lose granularity. A tweet classified as "negative" with 51% confidence is very different from one at 99% confidence. The continuous score captures this, enabling:
+- Per-thread mean sentiment for paired statistical tests
+- Sentiment residual analysis (sim − real) across 100 threads
+- Density overlay plots showing distribution shape, not just category proportions
+
+**Assumption:** `P(positive) - P(negative)` is a valid unidimensional sentiment measure. This is standard in computational social science (see: SentiStrength, VADER scoring approaches).
+
+### Figures Produced
+
+| Figure | Purpose | What It Shows |
+|--------|---------|---------------|
+| **Fig 1** — Sentiment Residual Histogram | Bias detection | If simulation is unbiased, distribution centres near 0 |
+| **Fig 2** — JSD Boxplot (3 dimensions) | Quality spread | Median + IQR of sentiment/political/emotion JSD across 100 threads |
+| **Fig 3** — Aggression Scatter | Calibration check | Real vs simulated aggression with y=x line and Pearson r |
+| **Fig 4** — Overall Accuracy Histogram | Rating distribution | How many threads are EXCELLENT/GOOD/FAIR/POOR |
+| **Fig 5** — Political Aggregate Bars | Population-level match | Left/Center/Right proportions pooled across all threads |
+| **Fig 6** — Sentiment Density Overlay | Distribution shape | Continuous [-1,1] sentiment density for all real vs all simulated tweets |
+
+### Statistical Test: Wilcoxon Signed-Rank
+
+**What:** Non-parametric paired test comparing per-thread mean sentiment (real vs simulated).
+
+**Why Wilcoxon over paired t-test:**
+- Does not assume normality of sentiment differences
+- Robust to outliers (e.g., one thread with extreme sentiment mismatch)
+- Standard in ABM validation literature for paired simulation-vs-reality comparisons
+
+**Interpretation:**
+- p < 0.05 → statistically significant systematic bias in simulated sentiment
+- p ≥ 0.05 → no evidence of systematic bias (simulation matches reality at population level)
+
+### Overall Accuracy Formula
+
+Same weighted formula as `validate_comprehensive.py` (Step 6):
+```
+Overall = 30% × (1 - political_JSD) + 20% × (1 - emotion_JSD)
+        + 30% × (1 - sentiment_JSD) + 20% × (1 - |aggression_gap|)
+```
+
+Thresholds: EXCELLENT ≥80%, GOOD ≥60%, FAIR ≥40%, POOR <40%.
+
+### Checkpoint System
+
+Classification is the expensive step (~2-4 hours on CPU). The script saves `all_tweets_classified.csv` after completing each thread. On restart with `--resume` (default), it skips already-classified threads. This means:
+- Power loss / crash → lose at most 1 thread's work
+- Can monitor progress by checking CSV row count
+- Checkpoint file doubles as the raw data archive for future analysis
+
+### Reused Code
+
+Imports directly from `scripts/validate_comprehensive.py`:
+- `load_models()` — loads 5 RoBERTa pipelines
+- `load_thread()` — parses both `temporal_events` and flat list JSON formats
+- `compute_distribution()` — categorical label proportions
+- `compute_jsd()` — Jensen-Shannon Divergence with label alignment
+
+New function `classify_tweet_full()` extends the original `classify_tweet()` by also returning raw sentiment probabilities for the continuous score.
+
+### Output Files
+
+```
+batch_analysis_100/
+├── all_tweets_classified.csv      # Every tweet with 5-model DNA + source + thread_id
+├── per_thread_results.csv         # 100-row metrics table
+├── aggregate_results.json         # Summary stats for programmatic access
+├── summary.txt                    # Human-readable report with Wilcoxon test
+└── figures/
+    ├── fig1_sentiment_residual_histogram.png
+    ├── fig2_jsd_boxplot.png
+    ├── fig3_aggression_scatter.png
+    ├── fig4_overall_accuracy_histogram.png
+    ├── fig5_political_aggregate.png
+    └── fig6_sentiment_distribution_overlay.png
+```
+
+### Usage
+
+```bash
+# Full run (auto-detects GPU)
+python scripts/validate_batch_100.py
+
+# Force CPU
+python scripts/validate_batch_100.py --device cpu
+
+# Fresh start (ignore checkpoint)
+python scripts/validate_batch_100.py --no-resume
+```
+
+### Assumptions
+
+1. **All 100 threads have both `thread_metadata.json` and `simulation_output/simulated_thread_metadata.json`** — threads missing either file are skipped with a warning
+2. **RoBERTa models are deterministic** — same text always produces same classification (no sampling involved)
+3. **Per-thread mean sentiment is a meaningful aggregate** — assumes tweets within a thread are representative of that thread's discourse
+4. **100 threads is sufficient for statistical claims** — provides ~95% CI width of ±0.2σ for normally distributed metrics
+5. **The `top_k=None` parameter returns all 3 sentiment probabilities** — verified in HuggingFace transformers pipeline API
+
+### Dependencies
+
+No new dependencies beyond existing requirements:
+- `scipy.stats.wilcoxon`, `scipy.stats.pearsonr` — already available from `scipy` (used in Step 6)
+- `matplotlib` — already used for validation plots
+- `transformers`, `torch`, `pandas`, `numpy`, `tqdm` — core stack
+
+---
+
+### Results: 100-Thread Batch Validation
+
+**Run date:** 2025-02-07
+**Model:** Dolphin-Llama3 8B (Ollama local, uncensored)
+**Dataset:** 100 threads from USC X 24, May-July 2024
+
+#### Headline Numbers
+
+| Metric | Value |
+|--------|-------|
+| Threads analysed | 100 |
+| Total tweets classified | 12,732 (6,528 real + 6,204 simulated) |
+| Overall accuracy | **91.6% ± 4.3%** |
+| EXCELLENT (≥80%) | 98 threads |
+| GOOD (60-80%) | 2 threads |
+| FAIR / POOR | 0 threads |
+
+#### What Works Well
+
+**1. Political Leaning — Near-Perfect (JSD median: 0.009)**
+
+This is the standout success. The simulation reproduces the Left/Right split of each thread almost exactly. Political JSD median is 0.009, mean 0.017 — well below the 0.15 "good" threshold. Almost no outliers. This means the behavioural persona prompts (Step 8 fix) are working: Left agents generate text classified as Left, Right agents generate text classified as Right. The aggregate shows real tweets are 61.5% Right / 38.0% Left, simulated are 54.5% Right / 45.3% Left — a ~7% left-shift, but per-thread the match is tight.
+
+**2. Emotion Distribution — Good (JSD median: 0.072)**
+
+Emotion JSD is well under the 0.15 threshold for most threads, with a few outliers reaching 0.35. The simulation captures the dominant emotional tone (joy/schadenfreude + anger) of political discourse.
+
+**3. Overall Weighted Accuracy — Strong (91.6%)**
+
+98 of 100 threads score EXCELLENT. The 2 GOOD-rated threads (thread_040 at 72.7% and thread_048 at 81.0%) are outliers where the real thread had unusually positive sentiment (the simulation overcorrected to negative). The distribution is tightly clustered between 85-98%.
+
+#### What Needs Improvement
+
+**1. Systematic Negative Sentiment Bias — The Primary Problem**
+
+The sentiment residual histogram (Fig 1) is the clearest evidence of a systematic issue:
+- **Mean residual: -0.387 ± 0.191** — the simulation is consistently ~0.4 points more negative than reality on a [-1, +1] scale
+- The distribution is centred far from zero, with almost no threads near the 0 line
+- **Wilcoxon signed-rank test: p = 4.0 × 10⁻¹⁸** — this is not random noise, it is a statistically significant systematic bias
+- The sentiment density overlay (Fig 6) shows the problem visually: simulated tweets are heavily concentrated at the extreme negative end (-0.9 to -0.8), while real tweets have a much broader spread from -1.0 to +1.0 with a long positive tail
+
+**Interpretation:** The Dolphin-Llama3 model + our aggressive persona prompts overshoot negativity. Real political Twitter has a mix: some tweets are genuinely positive (celebrating wins, expressing hope, sharing jokes), but the simulation generates almost exclusively negative/attacking content. The vocabulary injection ("MAGA", "corrupt", "radical left") and aggression-tier system push every agent toward hostility, even when the real conversation has lighter moments.
+
+**Impact:** The sentiment JSD (median 0.109) is the weakest of the three categorical dimensions. It's still below 0.15 for most threads, but this is where the model fails hardest.
+
+**2. Aggression Is Uncorrelated — The Model Ignores Thread Context**
+
+The aggression scatter plot (Fig 3) reveals a fundamental problem:
+- **Pearson r = 0.202 (p = 0.044)** — barely significant, essentially no correlation
+- Simulated aggression clusters around 0.35-0.45 regardless of whether the real thread has low aggression (0.10) or high aggression (0.45)
+- Real aggression: **0.276 ± 0.058**, Simulated: **0.390 ± 0.042**
+- The simulation is consistently ~0.11 points more aggressive AND does not vary with thread context
+
+**Interpretation:** The persona prompts set a fixed aggression floor. An agent with hate_score=0.1 in a mild thread generates text with the same hostility as an agent with hate_score=0.7 in a toxic thread. The model doesn't modulate its output based on the actual thread content — it follows the persona template rigidly.
+
+**3. Sentiment Distribution Shape — Too Narrow**
+
+Fig 6 shows the simulated sentiment is concentrated in a sharp spike at -0.9, while real sentiment is distributed broadly across the full [-1, +1] range. The simulation lacks variance — it produces uniformly very-negative text rather than a realistic mix of negative, neutral, and positive.
+
+**4. Political Left-Shift at Aggregate Level**
+
+Fig 5 shows a ~7% aggregate shift: real is 61.5% Right / 38.0% Left, simulated is 54.5% Right / 45.3% Left. Per-thread JSD is tiny (the model matches each thread's ratio), so this is driven by the LLM generating slightly more Left-classified text from Right-persona agents. Likely the model's training data biases Right-persona output toward more centrist/moderate language that the political classifier reads as Left.
+
+#### Root Cause Analysis
+
+All four problems share a common root: **the LLM produces output with fixed characteristics regardless of input context.**
+
+1. **Fixed negativity:** Persona prompts push all agents to be negative. The model doesn't know when to be positive/neutral.
+2. **Fixed aggression:** Aggression tier in the system prompt sets a floor, not a dynamic range.
+3. **No variance:** 8B model lacks the nuance to produce diverse emotional tones within a persona.
+4. **Left bleed:** Right-persona agents occasionally generate moderate language because the 8B model's understanding of "conservative Twitter user" is imprecise.
+
+#### Possible Fixes (Future Work)
+
+1. **Thread-adaptive sentiment calibration:** Before generating, sample 5-10 real tweets from the thread and include them as few-shot examples. This would anchor the model to the actual thread tone.
+2. **Dynamic aggression scaling:** Instead of fixed aggression tiers, scale the persona aggressiveness based on the thread's observed aggression level.
+3. **Temperature/sampling diversity:** Use higher temperature (1.2-1.5) with nucleus sampling to introduce more variance in sentiment.
+4. **Larger model:** Dolphin 70B or Llama 3.3 70B may have better persona control and produce more varied output. The 8B model likely lacks capacity to distinguish subtle tone differences.
+5. **Post-hoc sentiment correction:** Apply a calibration function to adjust generated text sentiment distribution to match the real thread's distribution.
+
+#### Dissertation Framing
+
+**Strengths to highlight:**
+- 98/100 EXCELLENT is a strong headline result
+- Political alignment is near-perfect — the ABM correctly models ideological identity
+- 91.6% overall accuracy across 100 diverse threads demonstrates generalization
+
+**Limitations to acknowledge honestly:**
+- Systematic negative bias (mean residual -0.387) shows the LLM overshoots negativity
+- Aggression is essentially uncorrelated (r = 0.202) — the model doesn't adapt to thread context
+- These are inherent limitations of using a small (8B) uncensored LLM for discourse simulation
+- The Wilcoxon p-value (4 × 10⁻¹⁸) means we cannot claim the simulation is unbiased
+
+**Framing strategy:** Position the negative bias as a known, quantified limitation rather than a hidden flaw. The simulation captures *who says what* (political alignment) better than *how they say it* (sentiment/aggression). This is a contribution: it shows LLM-based ABMs can model ideological sorting but struggle with tonal calibration. Future work with larger models or few-shot adaptation could close this gap.
+

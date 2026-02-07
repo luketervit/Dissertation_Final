@@ -57,6 +57,8 @@ Documentation: All scientific assumptions (e.g., Pew 2024 distributions) must be
 
 Hardware: Prioritize local inference (torch with CPU/GPU) over paid APIs.
 
+GCP Instance: The GCP VM has a Tesla T4 GPU. ALWAYS install PyTorch with CUDA support (`pip install torch --index-url https://download.pytorch.org/whl/cu124`), NEVER use the CPU-only version. Always verify GPU is available with `torch.cuda.is_available()` before running classification or inference jobs. Ollama also uses the T4 for LLM inference.
+
 🎓 Dissertation-Specific Requirements
 Validation: "Success" is defined by matching simulated Active behavior in T2 to real-world T2 data.
 

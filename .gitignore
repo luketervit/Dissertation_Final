@@ -19,6 +19,10 @@ dist/
 *.parquet
 !data/.gitkeep
 batch_output/
+batch_output_100/
+batch_analysis/
+batch_simulations/
+batch_simulations_100/
 
 # Output files
 output/*
