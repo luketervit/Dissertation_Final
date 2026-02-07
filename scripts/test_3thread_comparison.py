@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 MODELS = ["dolphin-llama3:8b", "llama3.1:8b"]
 BATCH_DIR = Path("batch_simulations")
-AGENTS_CSV = Path("processed_agents/processed_agents_august.csv")
+AGENTS_DIR = Path("processed_agents")
 TEST_THREADS = [1, 2, 3]  # thread_001, thread_002, thread_003
 MAX_ROUNDS = 5
 
@@ -135,13 +135,25 @@ def main():
     print("3-THREAD MODEL COMPARISON TEST (Real Participants)")
     print("=" * 80)
 
-    # Load global agents pool
-    if not AGENTS_CSV.exists():
-        print(f"ERROR: {AGENTS_CSV} not found. Run gcp_full_pipeline.py step 3 first.")
-        sys.exit(1)
+    # Load global agents pool (supports single file or chunked files)
+    single_file = AGENTS_DIR / "processed_agents_august.csv"
+    chunk_files = sorted(AGENTS_DIR.glob("processed_agents_chunk_*.csv"))
 
-    global_agents = pd.read_csv(AGENTS_CSV)
-    print(f"Loaded {len(global_agents)} agents from {AGENTS_CSV}")
+    if single_file.exists():
+        global_agents = pd.read_csv(single_file)
+        print(f"Loaded {len(global_agents)} agents from {single_file}")
+    elif chunk_files:
+        print(f"Loading agents from {len(chunk_files)} chunk files...")
+        global_agents = pd.concat(
+            [pd.read_csv(f) for f in chunk_files], ignore_index=True
+        )
+        # Deduplicate by user_id (same user may appear in multiple chunks)
+        global_agents = global_agents.drop_duplicates(subset=["user_id"], keep="first")
+        print(f"Loaded {len(global_agents)} unique agents from {len(chunk_files)} chunks")
+    else:
+        print(f"ERROR: No agent files found in {AGENTS_DIR}/")
+        print(f"  Expected: processed_agents_august.csv or processed_agents_chunk_*.csv")
+        sys.exit(1)
 
     # Find thread directories
     thread_dirs = []
