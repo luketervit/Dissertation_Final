@@ -164,6 +164,9 @@ class ThreadValidator:
             dict: {'Positive': 0.3, 'Neutral': 0.5, 'Negative': 0.2}
         """
         total = len(classified_tweets)
+        if total == 0:
+            return {'Positive': 0.0, 'Neutral': 0.0, 'Negative': 0.0}
+
         counts = Counter([t['sentiment_label'] for t in classified_tweets])
 
         distribution = {
@@ -188,8 +191,17 @@ class ThreadValidator:
         p = np.array([dist1[label] for label in labels])
         q = np.array([dist2[label] for label in labels])
 
+        # Guard against empty distributions (all zeros)
+        if p.sum() == 0 or q.sum() == 0:
+            return 1.0  # Maximum divergence if one distribution is empty
+
         # JSD (scipy returns sqrt of JSD, so we square it)
         jsd = jensenshannon(p, q) ** 2
+
+        # Guard against NaN from numerical issues
+        if np.isnan(jsd):
+            return 1.0
+
         return jsd
 
     def calculate_max_depth(self, tweets):
@@ -325,6 +337,7 @@ class ThreadValidator:
 
         plt.tight_layout()
         plt.savefig(output_path, dpi=300)
+        plt.close(fig)  # Free memory - prevents leak over 100+ threads
         print(f"\n✓ Saved visualization: {output_path}")
 
     def generate_report(self, real_tweets, sim_tweets, jsd, real_depth, sim_depth,

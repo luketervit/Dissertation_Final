@@ -23,16 +23,23 @@ class ThreadAgent(Agent):
     An agent that can read a thread and generate replies based on their persona.
     """
 
-    def __init__(self, model, user_id, dna):
+    def __init__(self, unique_id, model, user_id, dna):
         """
         Initialize agent with DNA persona.
 
         Args:
+            unique_id: Mesa agent unique identifier
             model: The ThreadModel instance
             user_id: Twitter user ID
             dna: Dict with political_label, emotion, aggression, etc.
         """
-        super().__init__(model)
+        # Mesa 2.4.0 compat: replicate Agent.__init__ without
+        # calling super() which hits object.__init__() on Python 3.9
+        self.unique_id = unique_id
+        self.model = model
+        self.pos = None
+        if hasattr(model, 'register_agent'):
+            model.register_agent(self)
         self.user_id = user_id
 
         # Persona from DNA
@@ -180,6 +187,8 @@ class ThreadAgent(Agent):
                 target_post=target_post,
                 thread_context=thread_context
             )
+            # Live monitoring: Print a dot or message immediately
+            print(f"  > Agent {self.user_id} generated a reply ({len(reply)} chars)")
             return reply
         except Exception as e:
             print(f"LLM generation error for user {self.user_id}: {e}")
@@ -251,20 +260,29 @@ class ThreadModel(Model):
         )
 
         print(f"✓ Thread simulation initialized:")
-        print(f"  Agents: {len(self.agents)}")
+        print(f"  Agents: {len(self.agent_list)}")
         print(f"  Base tweet: \"{self.base_tweet['text'][:80]}...\"")
 
     def _initialize_agents(self):
         """Load agents from DNA profiles."""
         agents_df = pd.read_csv(self.config['paths']['agents_for_thread'])
 
+        if 'user_id' not in agents_df.columns:
+            raise ValueError(
+                f"agents_for_thread.csv missing 'user_id' column. "
+                f"Found columns: {list(agents_df.columns)}"
+            )
+
+        # Drop rows with missing user_id
+        agents_df = agents_df.dropna(subset=['user_id'])
+
         for idx, row in agents_df.iterrows():
             agent = ThreadAgent(
+                unique_id=self.next_id(),
                 model=self,
                 user_id=row['user_id'],
                 dna=row.to_dict()
             )
-            self.register_agent(agent)
             self.agent_list.append(agent)
 
     def add_post(self, user_id, text, parent_id, political_label, emotion, aggression):
@@ -339,9 +357,12 @@ class ThreadModel(Model):
             self.step()
 
             posts_this_round = sum(1 for p in self.thread_history if p['round'] == round_num)
-            print(f"\n✓ Round {round_num + 1} complete: {posts_this_round} new posts | "
-                  f"Total: {len(self.thread_history)} | "
-                  f"Max depth: {max([p['depth'] for p in self.thread_history])}")
+            print(f"\n✓ Round {round_num + 1} complete: {posts_this_round} responses generated | "
+                  f"Total Posts: {len(self.thread_history)} | "
+                  f"Active Agents: {len(self.agent_list)}")
+            
+            # Export intermediate results for monitoring
+            self.export_results()
 
         print(f"\n✓ Simulation complete!")
         print(f"  Total posts: {len(self.thread_history)}")
@@ -408,8 +429,8 @@ class ThreadModel(Model):
                 'active_agents': len(self.agent_list),
                 'lurker_agents': 0,
                 'total_agents': len(self.agent_list),
-                'lurker_ratio': self.config['abm']['lurker_ratio'],
-                'lurker_dist_strategy': self.config['abm']['lurker_dist_strategy'],
+                'lurker_ratio': self.config.get('abm', {}).get('lurker_ratio', 0.0),
+                'lurker_dist_strategy': self.config.get('abm', {}).get('lurker_dist_strategy', 'none'),
                 'lurker_political_dist': self.config.get('lurker_agents_dist', {})
             },
             'simulation_info': {

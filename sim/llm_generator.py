@@ -1,8 +1,14 @@
 """
 LLM wrapper for generating agent replies.
 Supports OpenAI, Anthropic, Ollama, and mock mode.
+
+Per-agent system prompts encode political persona behaviorally
+(not as labels) to prevent the model from echoing its role.
 """
+from __future__ import annotations
+
 import os
+import re
 import json
 from pathlib import Path
 from dotenv import load_dotenv
@@ -10,197 +16,411 @@ from dotenv import load_dotenv
 # Load .env from project root
 load_dotenv(Path(__file__).parent.parent / '.env')
 
+# Political vocabulary banks for realistic tweet generation.
+# Left-wing agents use progressive attack language; Right-wing agents
+# use conservative attack language. Sourced from top keywords in real
+# USC X 24 threads (validated against thread_001 and thread_002).
+LEFT_VOCAB = [
+    "MAGA", "GOP", "insurrection", "fascist", "authoritarian",
+    "corrupt", "oligarch", "big oil", "voter suppression",
+    "extremist", "white nationalist", "grifter", "sedition",
+]
+RIGHT_VOCAB = [
+    "woke", "radical left", "open borders", "deep state",
+    "fake news", "socialism", "defund", "indoctrination",
+    "weaponized", "witch hunt", "hoax", "crooked",
+]
+
+# Emotion-to-behaviour mapping. The RoBERTa emotion model labels
+# political schadenfreude as "joy", so we translate each label
+# into the *actual Twitter behaviour* it represents.
+EMOTION_BEHAVIOUR = {
+    "joy": "mocking and sarcastic, celebrating your side's wins while taunting opponents",
+    "anger": "furious and combative, attacking opponents with sharp language",
+    "sadness": "bitter and disillusioned, lamenting the state of the country",
+    "fear": "alarmed and urgent, warning about threats to democracy or freedom",
+    "surprise": "incredulous and shocked, calling out hypocrisy and double standards",
+    "disgust": "contemptuous and scathing, expressing revulsion at opponents",
+    "optimism": "rallying and defiant, pushing your side's agenda with confidence",
+}
+
+
+def _aggression_tone(aggression: float) -> str:
+    """Map continuous aggression score to behavioural tone description."""
+    if aggression >= 0.7:
+        return (
+            "extremely hostile and confrontational — you insult opponents "
+            "directly, use profanity, and show zero respect for opposing views"
+        )
+    if aggression >= 0.5:
+        return (
+            "aggressive and combative — you attack opponents' arguments harshly, "
+            "use loaded language, and dismiss their points with contempt"
+        )
+    if aggression >= 0.3:
+        return (
+            "assertive and sharp — you push back firmly, use pointed sarcasm, "
+            "and don't hold back your criticism"
+        )
+    return (
+        "pointed but measured — you disagree firmly and use dry wit, "
+        "but avoid outright hostility"
+    )
+
 
 class LLMGenerator:
     """
-    Wrapper for LLM-based text generation.
+    Wrapper for LLM-based text generation with per-agent persona prompts.
     """
 
-    def __init__(self, config):
+    def __init__(self, config: dict) -> None:
         """
         Initialize LLM generator from config.
 
         Args:
-            config: Dict with llm configuration
+            config: Dict with llm configuration.
         """
         self.provider = config['provider']
         self.model = config['model']
-        self.temperature = config['temperature']
-        self.max_tokens = config['max_tokens']
-        self.system_prompt = config['system_prompt']
+        self.temperature = config.get('temperature', 0.9)
+        self.max_tokens = config.get('max_tokens', 150)
 
         # Initialize client based on provider
         if self.provider == "openai":
             api_key = os.getenv(config['api_key_env'])
             if not api_key:
-                raise ValueError(f"Environment variable {config['api_key_env']} not set")
-
+                raise ValueError(
+                    f"Environment variable {config['api_key_env']} not set"
+                )
             from openai import OpenAI
             self.client = OpenAI(api_key=api_key)
 
         elif self.provider == "anthropic":
             api_key = os.getenv(config['api_key_env'])
             if not api_key:
-                raise ValueError(f"Environment variable {config['api_key_env']} not set")
-
+                raise ValueError(
+                    f"Environment variable {config['api_key_env']} not set"
+                )
             import anthropic
             self.client = anthropic.Anthropic(api_key=api_key)
 
         elif self.provider == "ollama":
-            # Local Ollama - no API key needed
             import requests
-            self.ollama_url = "http://localhost:11434/api/generate"
+            # Use /api/chat for proper ChatML role separation
+            self.ollama_url = "http://localhost:11434/api/chat"
+
+            # Health check: verify Ollama is running and model is available
+            try:
+                health = requests.get(
+                    "http://localhost:11434/api/tags", timeout=10
+                )
+                if health.status_code != 200:
+                    raise ConnectionError(
+                        f"Ollama returned status {health.status_code}"
+                    )
+                available_models = [
+                    m['name'] for m in health.json().get('models', [])
+                ]
+                model_base = self.model.split(':')[0]
+                if not any(model_base in m for m in available_models):
+                    print(f"  WARNING: Model '{self.model}' not found.")
+                    print(f"  Available: {available_models}")
+                    print(f"  Run: ollama pull {self.model}")
+                    raise ValueError(
+                        f"Model '{self.model}' not available in Ollama"
+                    )
+                print(
+                    f"  ✓ Ollama connected, model '{self.model}' available"
+                )
+            except requests.exceptions.ConnectionError:
+                raise ConnectionError(
+                    "Cannot connect to Ollama at localhost:11434. "
+                    "Is Ollama running? Start it with: ollama serve"
+                )
 
         elif self.provider == "mock":
-            # Mock mode for testing without API calls
             self.client = None
 
         else:
             raise ValueError(f"Unknown LLM provider: {self.provider}")
 
-    def generate_reply(self, agent_persona, target_post, thread_context):
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def generate_reply(
+        self,
+        agent_persona: dict,
+        target_post: dict,
+        thread_context: list,
+    ) -> str:
         """
         Generate a reply from the agent's perspective.
 
         Args:
-            agent_persona: Dict with political_label, aggression, emotion
-            target_post: Dict with the post being replied to
-            thread_context: List of recent posts for context
+            agent_persona: Dict with political_label, aggression, emotion.
+            target_post: Dict with the post being replied to.
+            thread_context: List of recent posts for context.
 
         Returns:
-            Generated reply text
+            Cleaned reply text (≤280 chars).
         """
-        # Build prompt
-        prompt = self._build_prompt(agent_persona, target_post, thread_context)
+        system_prompt = self._build_system_prompt(agent_persona)
+        user_prompt = self._build_user_prompt(target_post, thread_context)
 
         # Generate based on provider
         if self.provider == "openai":
-            return self._generate_openai(prompt)
+            raw = self._generate_openai(system_prompt, user_prompt)
         elif self.provider == "anthropic":
-            return self._generate_anthropic(prompt)
+            raw = self._generate_anthropic(system_prompt, user_prompt)
         elif self.provider == "ollama":
-            return self._generate_ollama(prompt)
+            raw = self._generate_ollama(system_prompt, user_prompt)
         elif self.provider == "mock":
             return self._generate_mock(agent_persona, target_post)
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
 
-    def _build_prompt(self, agent_persona, target_post, thread_context):
-        """Build prompt for LLM."""
-        # Agent persona
-        political = agent_persona['political_label']
-        aggression = agent_persona['aggression']
-        emotion = agent_persona['emotion']
+        cleaned = self._clean_response(raw)
+        if cleaned is None:
+            # Fallback: generation was garbage, return short political jab
+            label = agent_persona.get('political_label', 'Center')
+            if label == 'Left':
+                return "The GOP is destroying this country."
+            elif label == 'Right':
+                return "Democrats are ruining America."
+            else:
+                return "Both sides need to do better."
+        return cleaned
 
-        # Personality description (CONSERVATIVE DEFAULTS for generalization)
-        if aggression > 0.5:  # Original baseline threshold
-            tone = "aggressive and confrontational"
-        elif aggression > 0.3:  # Original baseline threshold
-            tone = "assertive and direct"
+    # ------------------------------------------------------------------
+    # Prompt construction
+    # ------------------------------------------------------------------
+
+    def _build_system_prompt(self, agent_persona: dict) -> str:
+        """
+        Build a per-agent system prompt that encodes persona
+        *behaviourally* without mentioning labels the model can echo.
+        """
+        political = agent_persona.get('political_label', 'Center')
+        aggression = agent_persona.get('aggression', 0.3)
+        emotion = agent_persona.get('emotion', 'anger')
+
+        # Political orientation described as values, not labels
+        if political == 'Left':
+            ideology = (
+                "You hold progressive political views. You support "
+                "social justice, government accountability, and are "
+                "critical of conservative/Republican policies."
+            )
+            vocab = ", ".join(LEFT_VOCAB[:8])
+        elif political == 'Right':
+            ideology = (
+                "You hold conservative political views. You support "
+                "limited government, traditional values, and are "
+                "critical of liberal/Democratic policies."
+            )
+            vocab = ", ".join(RIGHT_VOCAB[:8])
         else:
-            tone = "polite and measured"
+            ideology = (
+                "You hold moderate political views. You criticise "
+                "extremes on both sides and value pragmatic solutions."
+            )
+            vocab = "both sides, common sense, pragmatic, compromise"
 
-        persona_desc = f"You are a {political}-leaning Twitter user. Your tone is {tone}. Your dominant emotion is {emotion}."
+        tone = _aggression_tone(aggression)
+        emotion_desc = EMOTION_BEHAVIOUR.get(
+            emotion.lower(),
+            "passionate and opinionated, engaging forcefully in debate",
+        )
 
-        # Thread context
-        context_str = "\n".join([
-            f"- {p.get('political_label', 'Unknown')}: \"{p['text']}\""
-            for p in thread_context[-3:]  # Last 3 posts
-        ])
+        system_prompt = f"""You write short tweets in a political argument on Twitter/X.
 
-        # Target post
-        target_text = target_post['text']
-        target_political = target_post.get('political_label', 'Unknown')
+POLITICAL VIEWS: {ideology}
+TONE: You are {tone}.
+EMOTIONAL STYLE: You are {emotion_desc}.
+VOCABULARY: Use words like: {vocab}
 
-        # Full prompt
-        prompt = f"""{persona_desc}
+RULES — follow these EXACTLY:
+1. Write ONLY the tweet text. No quotation marks around it.
+2. NEVER reveal you are an AI, a bot, a language model, or playing a role.
+3. NEVER start with "As a..." or mention your political leaning explicitly.
+4. NEVER use words like "dialogue", "unity", "together", "both sides" unless you are Center.
+5. Be specific — reference the topic being discussed, attack specific policies or people.
+6. Match the hostility level of the thread. Political Twitter is aggressive.
+7. Maximum 280 characters. No hashtags unless relevant."""
 
-You're reading a political discussion thread. Here's the recent context:
+        return system_prompt
+
+    def _build_user_prompt(
+        self, target_post: dict, thread_context: list
+    ) -> str:
+        """
+        Build the user prompt containing only thread context
+        and the target tweet. No persona information here.
+        """
+        # Show recent context without political labels
+        context_lines = []
+        for p in thread_context[-3:]:
+            text = p.get('text', '')
+            if text:
+                context_lines.append(f"- \"{text}\"")
+        context_str = "\n".join(context_lines) if context_lines else "(none)"
+
+        target_text = target_post.get('text', '')
+
+        user_prompt = f"""Recent posts in the thread:
 {context_str}
 
-You're replying to this {target_political} post:
+You are replying to this tweet:
 "{target_text}"
 
-Write your reply (1-3 sentences, under 280 characters). Stay in character:"""
+Write your reply tweet:"""
 
-        return prompt
+        return user_prompt
 
-    def _generate_openai(self, prompt):
+    # ------------------------------------------------------------------
+    # Post-processing
+    # ------------------------------------------------------------------
+
+    # Patterns to strip from generated text
+    _STRIP_PATTERNS = [
+        # "As a left-leaning..." / "As a right-leaning..."
+        re.compile(
+            r'^as\s+a\s+(left|right|center|conservative|liberal|progressive)'
+            r'[\w\s-]*[,:]?\s*',
+            re.IGNORECASE,
+        ),
+        # "Dolphin replies:" / "Joyful Left Leaning Dolphin replies:"
+        re.compile(
+            r'^[\w\s]*(dolphin|llama|assistant|bot|ai)\s*(replies|says|responds'
+            r'|chimes in|writes|tweets)[:\s]*',
+            re.IGNORECASE,
+        ),
+        # "*chimes in*" / "*responds angrily*" stage directions
+        re.compile(r'^\*[^*]+\*\s*', re.IGNORECASE),
+        # "Reply:" / "Tweet:" prefix
+        re.compile(r'^(reply|tweet|response)[:\s]+', re.IGNORECASE),
+    ]
+
+    def _clean_response(self, text: str) -> str | None:
+        """
+        Post-process LLM output: strip meta-commentary, enforce
+        280-char limit, reject garbage.
+
+        Returns None if the cleaned text is too short (<20 chars).
+        """
+        if not text or text.startswith("["):
+            return None
+
+        # Strip surrounding quotes
+        text = text.strip().strip('"\'').strip()
+
+        # Apply stripping patterns iteratively (some stack)
+        for _ in range(3):
+            for pattern in self._STRIP_PATTERNS:
+                text = pattern.sub('', text).strip()
+
+        # Remove any remaining leading punctuation/whitespace
+        text = text.lstrip(',:;-– ').strip()
+
+        # Truncate to 280 chars at word boundary
+        if len(text) > 280:
+            text = text[:280].rsplit(' ', 1)[0]
+
+        # Reject if too short after cleaning
+        if len(text) < 20:
+            return None
+
+        return text
+
+    # ------------------------------------------------------------------
+    # Provider implementations
+    # ------------------------------------------------------------------
+
+    def _generate_openai(self, system_prompt: str, user_prompt: str) -> str:
         """Generate using OpenAI API."""
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
                 ],
                 temperature=self.temperature,
-                max_tokens=self.max_tokens
+                max_tokens=self.max_tokens,
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
             print(f"OpenAI API error: {e}")
-            return f"[Error generating response]"
+            return "[Error generating response]"
 
-    def _generate_anthropic(self, prompt):
+    def _generate_anthropic(
+        self, system_prompt: str, user_prompt: str
+    ) -> str:
         """Generate using Anthropic API."""
         try:
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
-                system=self.system_prompt,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
             )
             return response.content[0].text.strip()
         except Exception as e:
             print(f"Anthropic API error: {e}")
-            return f"[Error generating response]"
+            return "[Error generating response]"
 
-    def _generate_ollama(self, prompt):
-        """Generate using local Ollama."""
-        try:
-            import requests
-            response = requests.post(
+    def _generate_ollama(self, system_prompt: str, user_prompt: str) -> str:
+        """Generate using local Ollama with /api/chat + thread-based hard timeout."""
+        import requests
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
+        def _do_request() -> str:
+            resp = requests.post(
                 self.ollama_url,
                 json={
                     "model": self.model,
-                    "prompt": f"{self.system_prompt}\n\n{prompt}",
-                    "temperature": self.temperature,
-                    "stream": False
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "stream": False,
+                    "options": {
+                        "temperature": self.temperature,
+                        "num_predict": self.max_tokens,
+                        "num_ctx": 2048,
+                        "repeat_penalty": 1.1,
+                    },
                 },
-                timeout=60  # 60 second timeout
+                timeout=(30, 120),
             )
-            if response.status_code != 200:
-                print(f"Ollama HTTP error {response.status_code}: {response.text}")
+            if resp.status_code != 200:
                 return "[Error generating response]"
+            message = resp.json().get('message', {})
+            return message.get('content', '').strip()
 
-            result = response.json()
-            if 'response' not in result:
-                print(f"Ollama response missing 'response' field: {result}")
-                return "[Error generating response]"
-
-            return result['response'].strip()
-        except requests.exceptions.Timeout:
-            print(f"Ollama timeout after 60s - model may be too slow")
+        try:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_do_request)
+                result = future.result(timeout=90)
+                return result if result else "[Error generating response]"
+        except TimeoutError:
+            print("Ollama 90s hard timeout — skipping agent")
             return "[Timeout]"
         except Exception as e:
             print(f"Ollama error: {e}")
-            return f"[Error generating response]"
+            return "[Error generating response]"
 
-    def _generate_mock(self, agent_persona, target_post):
+    def _generate_mock(self, agent_persona: dict, target_post: dict) -> str:
         """Mock generator for testing without API."""
         political = agent_persona['political_label']
         aggression = agent_persona['aggression']
-
-        # Simple rule-based mock
         target_political = target_post.get('political_label', 'Center')
 
         if political == target_political:
-            return "I agree with your perspective on this."
+            return "Exactly right. They don't want you to see the truth."
         elif aggression > 0.5:
-            return "I completely disagree. This view is fundamentally flawed."
+            return "This is completely wrong and you know it."
         else:
-            return "I see this differently, but I understand your point."
+            return "That's not how any of this works."

@@ -46,11 +46,11 @@ device = 0 if torch.cuda.is_available() else -1
 print(f"\nUsing: {'GPU' if device == 0 else 'CPU'}")
 
 print("\nLoading models...")
-political_p = pipeline("text-classification", model="matous-volf/political-leaning-politics", tokenizer="launch/POLITICS", device=device)
-emo_p       = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-emotion", device=device)
-sent_p      = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-sentiment-latest", device=device)
-hate_p      = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-hate-latest", device=device)
-offen_p     = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-offensive", device=device)
+political_p = pipeline("text-classification", model="matous-volf/political-leaning-politics", tokenizer="launch/POLITICS", device=device, truncation=True, max_length=512)
+emo_p       = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-emotion", device=device, truncation=True, max_length=512)
+sent_p      = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-sentiment-latest", device=device, truncation=True, max_length=512)
+hate_p      = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-hate-latest", device=device, truncation=True, max_length=512)
+offen_p     = pipeline("text-classification", model="cardiffnlp/twitter-roberta-base-offensive", device=device, truncation=True, max_length=512)
 print("✓ Models loaded")
 
 # Label mapping for political model

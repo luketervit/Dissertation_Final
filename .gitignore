@@ -18,6 +18,7 @@ dist/
 *.csv
 *.parquet
 !data/.gitkeep
+batch_output/
 
 # Output files
 output/*
@@ -44,3 +45,4 @@ Thumbs.db
 
 # Archive (old/deprecated code)
 archive/
+scripts/archive_thread_search/
