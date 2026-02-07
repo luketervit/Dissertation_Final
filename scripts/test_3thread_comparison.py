@@ -1,15 +1,14 @@
 """
 Test 3 threads with 2 models (dolphin-llama3:8b vs llama3.1:8b).
 
-Uses REAL thread participants from batch_simulations/ directories.
-For each thread, re-generates agents_for_thread.csv by matching user_ids
-from temporal_events to the global classified agents pool.
+Uses REAL thread participants by scanning raw data chunks for each thread's
+conversationId, extracting user_ids, and matching to the classified agents pool.
 
 Usage (on GCP):
     python scripts/test_3thread_comparison.py
 """
 import json
-import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -22,49 +21,86 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 MODELS = ["dolphin-llama3:8b", "llama3.1:8b"]
 BATCH_DIR = Path("batch_simulations")
 AGENTS_DIR = Path("processed_agents")
+DATA_DIR = Path("data")
 TEST_THREADS = [1, 2, 3]  # thread_001, thread_002, thread_003
 MAX_ROUNDS = 5
 
 
-def rebuild_agents_for_thread(thread_dir: Path, global_agents: pd.DataFrame) -> int:
+def find_thread_user_ids(conversation_id: str) -> set[str]:
+    """Scan raw data chunks to find all user_ids who participated in a thread."""
+    chunks = sorted(DATA_DIR.glob("aug_chunk_*.csv"))
+    if not chunks:
+        print(f"  WARNING: No aug_chunk_*.csv files in {DATA_DIR}")
+        return set()
+
+    user_ids = set()
+    for chunk_file in chunks:
+        try:
+            df = pd.read_csv(chunk_file, dtype={
+                "id": str, "conversationId": str,
+            }, usecols=lambda c: c in ("id", "conversationId", "user", "userId"))
+
+            matched = df[df["conversationId"] == conversation_id]
+            if len(matched) == 0:
+                continue
+
+            for _, row in matched.iterrows():
+                uid = None
+                if "userId" in row and pd.notna(row.get("userId")):
+                    uid = str(row["userId"])
+                elif "user" in row and pd.notna(row.get("user")):
+                    m = re.search(r"'id':\s*(\d+)", str(row["user"]))
+                    uid = m.group(1) if m else None
+
+                if uid and uid not in ("None", "nan"):
+                    user_ids.add(uid)
+        except Exception:
+            pass
+
+    return user_ids
+
+
+def rebuild_agents_for_thread(
+    thread_dir: Path, global_agents: pd.DataFrame, global_agents_str: pd.Series
+) -> int:
     """Rebuild agents_for_thread.csv using REAL thread participants only.
 
-    Reads temporal_events from thread_metadata.json, extracts unique user_ids,
-    and matches them to the global classified agents pool.
+    Scans raw data to find user_ids by conversationId, then matches to
+    the global classified agents pool.
 
     Returns the number of matched agents.
     """
+    # Get the thread's conversationId from config or metadata
+    config_path = thread_dir / "config.yaml"
     metadata_path = thread_dir / "thread_metadata.json"
-    if not metadata_path.exists():
-        print(f"  WARNING: No thread_metadata.json in {thread_dir}")
+
+    conversation_id = None
+    if config_path.exists():
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+        conversation_id = str(config.get("target_tweet_id", ""))
+
+    if not conversation_id and metadata_path.exists():
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+        conversation_id = str(metadata.get("root_tweet", {}).get("id", ""))
+
+    if not conversation_id:
+        print(f"  WARNING: Could not determine conversationId for {thread_dir}")
         return 0
 
-    with open(metadata_path) as f:
-        metadata = json.load(f)
-
-    # Extract unique user_ids from temporal_events
-    events = metadata.get("temporal_events", [])
-    if not events:
-        print(f"  WARNING: No temporal_events in {thread_dir}")
-        return 0
-
-    user_ids = set()
-    for event in events:
-        uid = event.get("user_id")
-        if uid and str(uid) not in ("None", "nan", "unknown"):
-            user_ids.add(str(uid))
+    print(f"  Scanning raw data for conversationId={conversation_id}...")
+    user_ids = find_thread_user_ids(conversation_id)
 
     if not user_ids:
-        print(f"  WARNING: No valid user_ids in temporal_events for {thread_dir}")
+        print(f"  WARNING: No users found in raw data for thread {conversation_id}")
         return 0
 
     # Match to global agents pool
-    global_agents["user_id_str"] = global_agents["user_id"].astype(str)
-    matched = global_agents[global_agents["user_id_str"].isin(user_ids)].copy()
-    matched = matched.drop(columns=["user_id_str"])
+    matched = global_agents[global_agents_str.isin(user_ids)].copy()
 
     if len(matched) == 0:
-        print(f"  WARNING: No agents matched from {len(user_ids)} user_ids in {thread_dir}")
+        print(f"  WARNING: Found {len(user_ids)} users but none matched agents pool")
         return 0
 
     # Overwrite agents_for_thread.csv with real participants
@@ -155,6 +191,9 @@ def main():
         print(f"  Expected: processed_agents_august.csv or processed_agents_chunk_*.csv")
         sys.exit(1)
 
+    # Pre-compute string user_ids for matching
+    global_agents_str = global_agents["user_id"].astype(str)
+
     # Find thread directories
     thread_dirs = []
     for num in TEST_THREADS:
@@ -172,7 +211,7 @@ def main():
     print("\n--- Rebuilding agent files with real thread participants ---")
     for td in thread_dirs:
         print(f"\n{td.name}:")
-        rebuild_agents_for_thread(td, global_agents)
+        rebuild_agents_for_thread(td, global_agents, global_agents_str)
 
     print(f"\nModels: {MODELS}")
     print(f"Threads: {[t.name for t in thread_dirs]}")
