@@ -46,7 +46,9 @@ class ThreadAgent(Agent):
         self.political_label = dna['political_label']
         self.political_score = dna['political_score']
         self.emotion_label = dna['emotion_label']
-        self.aggression = dna.get('hate_score', 0) + dna.get('offensive_score', 0)
+        self.aggression = (
+            dna.get('hate_score', 0) + dna.get('offensive_score', 0)
+        )
         self.role = dna.get('role', 'active')
 
         # Staging variables
@@ -169,30 +171,37 @@ class ThreadAgent(Agent):
     def _generate_reply(self, target_post):
         """
         Generate reply text using LLM based on persona and target post.
+
+        Passes few-shot examples and thread mean aggression from the
+        model so the LLM adapts to the thread's actual tone.
         """
         # Build agent persona dict
         agent_persona = {
             'political_label': self.political_label,
             'aggression': self.aggression,
-            'emotion': self.emotion_label
+            'emotion': self.emotion_label,
         }
 
         # Get thread context (recent posts for context)
-        thread_context = self.model.thread_history[-10:]  # Last 10 posts
+        thread_context = self.model.thread_history[-10:]
 
-        # Generate using LLM
+        # Generate using LLM with few-shot grounding + dynamic aggression
         try:
             reply = self.model.llm_generator.generate_reply(
                 agent_persona=agent_persona,
                 target_post=target_post,
-                thread_context=thread_context
+                thread_context=thread_context,
+                few_shot_examples=self.model.few_shot_examples,
+                thread_mean_aggression=self.model.thread_mean_aggression,
             )
-            # Live monitoring: Print a dot or message immediately
-            print(f"  > Agent {self.user_id} generated a reply ({len(reply)} chars)")
+            # Live monitoring
+            print(
+                f"  > Agent {self.user_id} generated a reply "
+                f"({len(reply)} chars)"
+            )
             return reply
         except Exception as e:
             print(f"LLM generation error for user {self.user_id}: {e}")
-            # Fallback to simple response
             return "I have thoughts on this."
 
 
@@ -229,7 +238,7 @@ class ThreadModel(Model):
             'political_label': None,
             'emotion': None,
             'aggression': 0,
-            'round': 0
+            'round': 0,
         }
 
         # Thread history (all posts including base)
@@ -237,11 +246,29 @@ class ThreadModel(Model):
         self.post_id_counter = 1
         self.current_round = 0
 
+        # ---------------------------------------------------------
+        # Few-shot grounding: extract real tweet texts to anchor the
+        # LLM's tone to the actual thread discourse style.
+        # ---------------------------------------------------------
+        self.few_shot_examples = self._build_few_shot_examples(metadata)
+
+        # ---------------------------------------------------------
+        # Thread-level mean aggression for dynamic tone scaling.
+        # Computed from agents CSV so the LLM adapts to each
+        # thread's hostility level (fixes r = 0.20 correlation).
+        # ---------------------------------------------------------
+        self.thread_mean_aggression = self._compute_thread_mean_aggression()
+
         # Initialize LLM generator
         print("\n✓ Initializing LLM generator...")
         self.llm_generator = LLMGenerator(self.config['llm'])
         print(f"  Provider: {self.config['llm']['provider']}")
         print(f"  Model: {self.config['llm']['model']}")
+        print(
+            f"  Thread mean aggression: "
+            f"{self.thread_mean_aggression:.3f}"
+        )
+        print(f"  Few-shot examples: {len(self.few_shot_examples)}")
 
         # Initialize agents (manual staging, no scheduler needed)
         self.agent_list = []
@@ -262,6 +289,69 @@ class ThreadModel(Model):
         print(f"✓ Thread simulation initialized:")
         print(f"  Agents: {len(self.agent_list)}")
         print(f"  Base tweet: \"{self.base_tweet['text'][:80]}...\"")
+
+    # ------------------------------------------------------------------
+    # Thread-level context helpers
+    # ------------------------------------------------------------------
+
+    def _build_few_shot_examples(
+        self, metadata: dict, n: int = 8
+    ) -> list[str]:
+        """
+        Extract up to *n* real tweet texts from the thread metadata
+        for few-shot grounding in the LLM user prompt.
+
+        Supports two metadata formats:
+        - ``temporal_events`` list (original single-thread pipeline)
+        - Root tweet text only (batch pipeline via prepare_batch)
+
+        The sample is cached per-run so every agent sees the same
+        grounding examples within a simulation.
+        """
+        examples: list[str] = []
+
+        # Try temporal_events first (has full reply texts)
+        events = metadata.get('temporal_events', [])
+        if events:
+            # Exclude root (is_root=True), keep reply texts
+            reply_texts = [
+                e['text']
+                for e in events
+                if not e.get('is_root', False) and e.get('text')
+            ]
+            if reply_texts:
+                sample_size = min(n, len(reply_texts))
+                examples = random.sample(reply_texts, sample_size)
+                return examples
+
+        # Fallback: use the root tweet text as the sole grounding
+        # example. Even one real example helps anchor the LLM to
+        # the thread's topic and vocabulary.
+        root_text = metadata.get('root_tweet', {}).get('text', '')
+        if root_text:
+            examples.append(root_text)
+
+        return examples
+
+    def _compute_thread_mean_aggression(self) -> float:
+        """
+        Compute mean aggression (hate_score + offensive_score) from the
+        agents CSV for this thread.  Used for dynamic aggression
+        scaling so the LLM adapts to the thread's hostility level.
+        """
+        agents_path = self.config['paths']['agents_for_thread']
+        try:
+            agents_df = pd.read_csv(agents_path)
+            hate = agents_df.get('hate_score', pd.Series(dtype=float))
+            offensive = agents_df.get(
+                'offensive_score', pd.Series(dtype=float)
+            )
+            aggression = hate.fillna(0) + offensive.fillna(0)
+            mean_agg = float(aggression.mean())
+            return mean_agg if not np.isnan(mean_agg) else 0.3
+        except Exception as e:
+            print(f"  Warning: Could not compute mean aggression: {e}")
+            return 0.3  # safe default
 
     def _initialize_agents(self):
         """Load agents from DNA profiles."""

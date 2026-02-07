@@ -2149,3 +2149,161 @@ All four problems share a common root: **the LLM produces output with fixed char
 
 **Framing strategy:** Position the negative bias as a known, quantified limitation rather than a hidden flaw. The simulation captures *who says what* (political alignment) better than *how they say it* (sentiment/aggression). This is a contribution: it shows LLM-based ABMs can model ideological sorting but struggle with tonal calibration. Future work with larger models or few-shot adaptation could close this gap.
 
+---
+
+## Step 10: Sentiment Bias, Aggression Correlation & Distribution Shape Fix
+
+### Design Decision: Five-Pronged Prompt Engineering Overhaul
+
+**What:** Five coordinated changes to `sim/llm_generator.py` and `sim/thread_simulation.py` targeting the three validated failures from 100-thread batch validation: (1) systematic negative sentiment bias (mean residual -0.387), (2) uncorrelated aggression (Pearson r = 0.202), and (3) narrow sentiment distribution (spike at -0.9).
+
+**Why:** Root cause identified as "Generative Exaggeration" — the persona prompts + Dolphin-Llama3 8B pushed all agents into a fixed extreme-negative mode regardless of thread context. The model didn't adapt to the actual tone of each thread.
+
+**Constraint:** Must not degrade political JSD (median 0.009) or emotion JSD (0.072), which are already near-perfect.
+
+---
+
+### Change 1: Few-Shot Thread Grounding
+
+**What:** Sample up to 8 real tweet texts from the thread's `thread_metadata.json` and inject them into the LLM user prompt as tone-anchoring examples.
+
+**Implementation:**
+- `ThreadModel._build_few_shot_examples()` extracts real tweets from `temporal_events` (original single-thread pipeline) or falls back to root tweet text (batch pipeline)
+- Examples are sampled once per simulation run (cached on `self.few_shot_examples`) so all agents see the same grounding
+- Passed through `ThreadAgent._generate_reply()` → `LLMGenerator.generate_reply()` → `_build_user_prompt()`
+
+**Prompt injection format:**
+```
+Here's how people are actually talking in this thread:
+- "When he was crushing Biden, the polls were fine. Now they're fake"
+- "MAGA arrogance will lose the election."
+[...]
+Match this tone and style. Some tweets attack, some agree, some joke.
+```
+
+**Scientific justification:** Argyle et al. (2023), "Out of One, Many" — demonstrates that few-shot behavioral grounding achieves 81% correlation vs 20% for label-only prompting. Real examples naturally contain the full sentiment range of the thread, preventing the model from defaulting to extreme negativity.
+
+**Assumption:** For the batch pipeline (which only stores root tweet text), a single grounding example still anchors the LLM to the correct topic and vocabulary, even if it doesn't capture the full sentiment range. This is a partial fix — full benefit requires adding real reply texts to batch metadata in future work.
+
+---
+
+### Change 2: Softened Aggression Tone Tiers
+
+**What:** Replaced the 4-tier aggression system with 5 tiers, removing extreme language from all levels.
+
+**Before (4 tiers):**
+- ≥0.7: "extremely hostile...insult...profanity...zero respect"
+- ≥0.5: "aggressive...attack...dismiss with contempt"
+- ≥0.3: "assertive and sharp...pointed sarcasm...don't hold back"
+- <0.3: "pointed but measured...dry wit"
+
+**After (5 tiers):**
+- ≥0.7: "confrontational — attack directly, don't hold back"
+- ≥0.5: "combative — challenge harshly, loaded language"
+- ≥0.3: "assertive — push back firmly, sarcasm"
+- ≥0.15: "opinionated but civil — state views, occasionally push back"
+- <0.15: "casual and conversational — sometimes agree, sometimes disagree"
+
+**Key changes:**
+- Removed "insult", "profanity", "zero respect", "contempt", "dismiss" — these pushed the model to generate hate speech-level content
+- New tier at <0.15 explicitly permits agreement and casual engagement
+- New tier at 0.15-0.3 uses "civil" instead of "pointed"
+- Bottom tier no longer implies disagreement as default ("you sometimes agree")
+
+**Rationale:** The previous bottom tier ("pointed but measured") still implied confrontation. Real Twitter threads contain positive, neutral, and mildly agreeable replies alongside attacks. The new tiers give the model explicit permission to generate non-negative content for low-aggression agents.
+
+---
+
+### Change 3: System Prompt Rule 6 Replacement
+
+**What:** Replaced "Match the hostility level of the thread. Political Twitter is aggressive." with "Not every reply is an attack. Sometimes you agree with someone, crack a joke, share a fact, or express genuine concern. Vary your tone naturally."
+
+**Rationale:** The old Rule 6 was the single biggest driver of negative bias. It instructed every agent to be aggressive regardless of their actual aggression score. The new rule explicitly tells the model that non-aggressive responses are valid, breaking the negative default.
+
+**Assumption:** This may slightly reduce negativity even for high-aggression agents. The aggression tier description in the TONE field still provides the appropriate hostility level, so the net effect should be more varied output rather than uniformly polite output.
+
+---
+
+### Change 4: Dynamic Aggression Scaling
+
+**What:** Agent aggression tone is now scaled relative to the thread's mean aggression, not just absolute thresholds.
+
+**Implementation:**
+- `ThreadModel._compute_thread_mean_aggression()` reads `hate_score + offensive_score` from `agents_for_thread.csv` at init time
+- `thread_mean_aggression` is passed through to `LLMGenerator._build_system_prompt()`
+- Relative aggression: `relative_agg = agent_aggression - thread_mean_aggression`
+
+**Scaling logic:**
+```python
+if relative_agg > 0.2:    # well above thread norm
+    tone = _aggression_tone(aggression)           # full tier
+elif relative_agg > -0.1:  # near thread norm
+    tone = _aggression_tone(aggression - 0.15)    # one tier softer
+else:                       # below thread norm
+    tone = _aggression_tone(aggression - 0.25)    # notably milder
+```
+
+**Effect:** In a mild thread (mean aggression 0.15), an agent at 0.35 gets the full assertive tier (they're notably above norm). In a toxic thread (mean 0.5), the same 0.35 agent gets the casual/civil tier (they're below norm). This should produce higher aggression correlation (r > 0.4) because the model's output hostility now varies with thread context.
+
+**Assumption:** Thread mean aggression from `agents_for_thread.csv` is a reasonable proxy for the thread's actual hostility level. This assumes the sampled agents' DNA profiles reflect the thread's discourse characteristics.
+
+---
+
+### Change 5: Expanded Context Window
+
+**What:** Increased the number of recent posts shown in the user prompt from 3 to 8.
+
+**Rationale:** More context gives the LLM a broader sample of the current conversation's tone. With only 3 posts, the model could see 3 consecutive negative posts and assume the entire thread is negative. With 8 posts, it's more likely to see a mix of sentiments, producing more varied output.
+
+**Trade-off:** Slightly increases prompt length (~400 tokens), but stays well within Ollama's 2048 context window. The marginal token cost is negligible for local inference.
+
+---
+
+### Files Modified
+
+| File | Lines Changed | Changes |
+|------|--------------|---------|
+| `sim/llm_generator.py` | `_aggression_tone()` | 5 tiers instead of 4, softer language |
+| `sim/llm_generator.py` | `generate_reply()` | New params: `few_shot_examples`, `thread_mean_aggression` |
+| `sim/llm_generator.py` | `_build_system_prompt()` | Dynamic aggression scaling, new Rule 6 |
+| `sim/llm_generator.py` | `_build_user_prompt()` | Few-shot grounding section, 8-post context window |
+| `sim/thread_simulation.py` | `ThreadModel.__init__()` | Compute `few_shot_examples` and `thread_mean_aggression` |
+| `sim/thread_simulation.py` | `_build_few_shot_examples()` | New method: extract real tweets from metadata |
+| `sim/thread_simulation.py` | `_compute_thread_mean_aggression()` | New method: mean aggression from agents CSV |
+| `sim/thread_simulation.py` | `ThreadAgent._generate_reply()` | Pass new params to LLM generator |
+
+---
+
+### Expected Impact
+
+| Metric | Before | Target | Mechanism |
+|--------|--------|--------|-----------|
+| Sentiment residual mean | -0.387 | > -0.2 | Few-shot grounding + softened tiers + Rule 6 |
+| Aggression Pearson r | 0.202 | > 0.4 | Dynamic aggression scaling |
+| Sentiment distribution | Spike at -0.9 | Broader spread | Expanded context + permission to be non-negative |
+| Political JSD | 0.009 | < 0.02 (no degradation) | No changes to political vocabulary or ideology prompts |
+
+---
+
+### Verification Plan
+
+1. Run 3-thread test with Dolphin-Llama3 8B (current model)
+2. Run same 3 threads with `llama3.1:8b` (Change 6 from plan — model switch test)
+3. Compare metrics:
+   - Sentiment residual closer to 0
+   - Aggression Pearson r > 0.4
+   - Sentiment distribution has broader spread
+   - Political JSD still < 0.02
+4. Pick best model → re-run all 100 threads on GCP T4
+5. Re-run `scripts/validate_batch_100.py` for new figures
+
+---
+
+### Assumptions
+
+1. **Few-shot grounding with root-text-only is still beneficial** for batch runs, even though it provides only one example instead of 8. The root tweet anchors topic vocabulary and discourse register.
+2. **Dynamic aggression scaling thresholds (0.2, -0.1) are reasonable starting points.** These may need tuning after the 3-thread test. The key innovation is the relative (not absolute) approach.
+3. **Softened tone descriptions won't collapse to Claude-like over-politeness** because the political vocabulary injection and emotion-to-behaviour mapping still push toward authentic political discourse. The difference is removing the *floor* of negativity, not the ceiling.
+4. **The 5th aggression tier (<0.15) will be triggered for ~20-30% of agents** based on the observed aggression distribution (mean ~0.28, many agents below 0.15). These agents will now generate genuinely neutral/positive content instead of forced negativity.
+5. **Expanding context from 3 to 8 posts stays within Ollama's 2048 context limit.** With system prompt (~300 tokens) + few-shot (~200 tokens) + context (~800 tokens) + target (~100 tokens), total is ~1400 tokens — well under the 2048 limit.
+

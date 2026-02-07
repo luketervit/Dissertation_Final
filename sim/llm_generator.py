@@ -49,22 +49,26 @@ def _aggression_tone(aggression: float) -> str:
     """Map continuous aggression score to behavioural tone description."""
     if aggression >= 0.7:
         return (
-            "extremely hostile and confrontational — you insult opponents "
-            "directly, use profanity, and show zero respect for opposing views"
+            "confrontational — you attack opponents directly "
+            "and don't hold back"
         )
     if aggression >= 0.5:
         return (
-            "aggressive and combative — you attack opponents' arguments harshly, "
-            "use loaded language, and dismiss their points with contempt"
+            "combative — you challenge opponents harshly "
+            "and use loaded language"
         )
     if aggression >= 0.3:
         return (
-            "assertive and sharp — you push back firmly, use pointed sarcasm, "
-            "and don't hold back your criticism"
+            "assertive — you push back firmly and use sarcasm"
+        )
+    if aggression >= 0.15:
+        return (
+            "opinionated but civil — you state your views clearly "
+            "and occasionally push back"
         )
     return (
-        "pointed but measured — you disagree firmly and use dry wit, "
-        "but avoid outright hostility"
+        "casual and conversational — you sometimes agree, sometimes "
+        "disagree, and engage like a normal person scrolling Twitter"
     )
 
 
@@ -153,6 +157,8 @@ class LLMGenerator:
         agent_persona: dict,
         target_post: dict,
         thread_context: list,
+        few_shot_examples: list[str] | None = None,
+        thread_mean_aggression: float = 0.3,
     ) -> str:
         """
         Generate a reply from the agent's perspective.
@@ -161,12 +167,21 @@ class LLMGenerator:
             agent_persona: Dict with political_label, aggression, emotion.
             target_post: Dict with the post being replied to.
             thread_context: List of recent posts for context.
+            few_shot_examples: Real tweet texts from the thread for tone
+                grounding.
+            thread_mean_aggression: Mean aggression of agents in this
+                thread, used to scale tone descriptions relative to the
+                thread norm.
 
         Returns:
             Cleaned reply text (≤280 chars).
         """
-        system_prompt = self._build_system_prompt(agent_persona)
-        user_prompt = self._build_user_prompt(target_post, thread_context)
+        system_prompt = self._build_system_prompt(
+            agent_persona, thread_mean_aggression
+        )
+        user_prompt = self._build_user_prompt(
+            target_post, thread_context, few_shot_examples
+        )
 
         # Generate based on provider
         if self.provider == "openai":
@@ -196,10 +211,16 @@ class LLMGenerator:
     # Prompt construction
     # ------------------------------------------------------------------
 
-    def _build_system_prompt(self, agent_persona: dict) -> str:
+    def _build_system_prompt(
+        self, agent_persona: dict, thread_mean_aggression: float = 0.3
+    ) -> str:
         """
         Build a per-agent system prompt that encodes persona
         *behaviourally* without mentioning labels the model can echo.
+
+        Aggression tone is scaled relative to *thread_mean_aggression*
+        so agents adapt to the thread's actual hostility level rather
+        than using absolute thresholds (fixes r = 0.20 correlation).
         """
         political = agent_persona.get('political_label', 'Center')
         aggression = agent_persona.get('aggression', 0.3)
@@ -227,7 +248,19 @@ class LLMGenerator:
             )
             vocab = "both sides, common sense, pragmatic, compromise"
 
-        tone = _aggression_tone(aggression)
+        # Dynamic aggression: scale relative to thread norm so that
+        # agents in mild threads produce milder output and agents in
+        # toxic threads produce harsher output.
+        relative_agg = aggression - thread_mean_aggression
+        if relative_agg > 0.2:
+            tone = _aggression_tone(aggression)  # above norm → full tier
+        elif relative_agg > -0.1:
+            # near norm → one tier softer than absolute would suggest
+            tone = _aggression_tone(max(0.0, aggression - 0.15))
+        else:
+            # below norm → notably milder
+            tone = _aggression_tone(max(0.0, aggression - 0.25))
+
         emotion_desc = EMOTION_BEHAVIOUR.get(
             emotion.lower(),
             "passionate and opinionated, engaging forcefully in debate",
@@ -246,37 +279,56 @@ RULES — follow these EXACTLY:
 3. NEVER start with "As a..." or mention your political leaning explicitly.
 4. NEVER use words like "dialogue", "unity", "together", "both sides" unless you are Center.
 5. Be specific — reference the topic being discussed, attack specific policies or people.
-6. Match the hostility level of the thread. Political Twitter is aggressive.
+6. Not every reply is an attack. Sometimes you agree with someone, crack a joke, share a fact, or express genuine concern. Vary your tone naturally.
 7. Maximum 280 characters. No hashtags unless relevant."""
 
         return system_prompt
 
     def _build_user_prompt(
-        self, target_post: dict, thread_context: list
+        self,
+        target_post: dict,
+        thread_context: list,
+        few_shot_examples: list[str] | None = None,
     ) -> str:
         """
-        Build the user prompt containing only thread context
-        and the target tweet. No persona information here.
+        Build the user prompt containing few-shot examples from the
+        real thread, recent simulated context, and the target tweet.
+
+        Few-shot grounding anchors the LLM to the actual discourse
+        style of the thread, preventing default-to-extreme-negativity.
         """
-        # Show recent context without political labels
+        parts: list[str] = []
+
+        # Few-shot grounding from real thread tweets
+        if few_shot_examples:
+            example_lines = "\n".join(
+                f'- "{ex}"' for ex in few_shot_examples
+            )
+            parts.append(
+                "Here's how people are actually talking in this thread:\n"
+                f"{example_lines}\n\n"
+                "Match this tone and style. Some tweets attack, some "
+                "agree, some joke."
+            )
+
+        # Show recent simulated context (expanded from 3 → 8)
         context_lines = []
-        for p in thread_context[-3:]:
+        for p in thread_context[-8:]:
             text = p.get('text', '')
             if text:
-                context_lines.append(f"- \"{text}\"")
-        context_str = "\n".join(context_lines) if context_lines else "(none)"
+                context_lines.append(f'- "{text}"')
+        context_str = (
+            "\n".join(context_lines) if context_lines else "(none)"
+        )
+        parts.append(f"Recent posts in the thread:\n{context_str}")
 
         target_text = target_post.get('text', '')
+        parts.append(
+            f'You are replying to this tweet:\n"{target_text}"\n\n'
+            "Write your reply tweet:"
+        )
 
-        user_prompt = f"""Recent posts in the thread:
-{context_str}
-
-You are replying to this tweet:
-"{target_text}"
-
-Write your reply tweet:"""
-
-        return user_prompt
+        return "\n\n".join(parts)
 
     # ------------------------------------------------------------------
     # Post-processing
