@@ -310,6 +310,13 @@ class ThreadModel(Model):
         """
         examples: list[str] = []
 
+        # Check if few-shot is enabled in config (default True)
+        # Supports `simulation: use_few_shot: false` for ablation testing
+        use_few_shot = self.config.get('simulation', {}).get('use_few_shot', True)
+        if not use_few_shot:
+            print("  ! Zero-Shot Mode: Few-shot grounding disabled.")
+            return []
+
         # Try temporal_events first (has full reply texts)
         events = metadata.get('temporal_events', [])
         if events:

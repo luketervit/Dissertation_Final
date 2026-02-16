@@ -23,6 +23,12 @@ batch_output_100/
 batch_analysis/
 batch_simulations/
 batch_simulations_100/
+batch_simulations_reconstructed/
+batch_output_new/
+batch_output_old/
+batch_analysis_new/
+batch_analysis_old/
+ablation_output/
 
 # Output files
 output/*
