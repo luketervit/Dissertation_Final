@@ -29,6 +29,8 @@ batch_output_old/
 batch_analysis_new/
 batch_analysis_old/
 ablation_output/
+parameter_sweep/
+dissertation_old_claude_pipeline_analysis/
 
 # Output files
 output/*
