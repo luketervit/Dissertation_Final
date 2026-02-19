@@ -10,6 +10,9 @@
 \usepackage{microtype} 
 \usepackage[round]{natbib} 
 \usepackage{url}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
 
 \begin{document}
 \begin{preliminary}
@@ -352,11 +355,215 @@ The best-performing 0-shot configuration --- no vocabulary injection, with the P
 % CHAPTER 5: EVALUATION
 % ==========================================
 \chapter{Evaluation}
+
 \section{Overview}
-\section{Computational Performance}
-\section{Retrieval Effectiveness}
-\section{User Interaction Benefits}
-\section{Overall Evaluation}
+
+This chapter presents a quantitative evaluation of the simulation system described in Chapters~3 and~4. The evaluation is structured in three stages. First, Section~\ref{sec:100thread} reports the results of a 100-thread validation run that tests the generalisability of the optimised pipeline across diverse political discourse threads. Second, Section~\ref{sec:fidelity} introduces a composite fidelity metric that summarises per-thread simulation quality as a single score, enabling distributional analysis of system performance. Third, Section~\ref{sec:ablation_eval} presents the results of the 21-configuration ablation study, identifying which design choices most influence simulation quality. The chapter concludes with a discussion of the system's strengths, limitations, and implications.
+
+All evaluation was performed against ground-truth data from the USC~X~24 dataset. Simulated threads were generated in fully 0-shot mode --- the simulation received only the root tweet and agent DNA profiles, with no access to real thread replies.
+
+% ------------------------------------------
+\section{100-Thread Validation}
+\label{sec:100thread}
+
+The optimised pipeline (Phase~5 parameters, no vocabulary injection, 0-shot mode) was run across 100 threads drawn from the USC~X~24 dataset. All 100 simulations completed successfully with no failures. The corpus comprised 6,528 real tweets and 6,097 simulated tweets (12,625 total), with threads ranging from 15 to 124 simulated posts.
+
+\subsection{Distributional Similarity}
+
+Three Jensen--Shannon Divergence (JSD) metrics were computed per thread, comparing the simulated and real distributions of sentiment, political leaning, and emotion labels. Table~\ref{tab:jsd_results} summarises the results.
+
+\begin{table}[ht]
+\centering
+\caption{JSD between simulated and real distributions across 100 threads.}
+\label{tab:jsd_results}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Dimension} & \textbf{Mean JSD} & \textbf{Std Dev} \\
+\midrule
+Sentiment   & 0.086 & 0.079 \\
+Political   & 0.039 & 0.038 \\
+Emotion     & 0.118 & 0.105 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three mean JSD values fall below the 0.15 threshold adopted for good distributional similarity. Political leaning is the best-matched dimension (mean JSD~$= 0.039$), indicating that the simulation accurately reproduces the partisan composition of real threads. Sentiment alignment is strong (mean JSD~$= 0.086$), and emotion is the most variable dimension (mean JSD~$= 0.118$), reflecting the greater difficulty of matching fine-grained emotional registers.
+
+Figure~\ref{fig:jsd_boxplot} shows the per-thread JSD distributions as box plots. The political JSD is tightly concentrated near zero with few outliers; sentiment and emotion exhibit longer tails corresponding to threads where the simulation diverged from the real distribution.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/02_jsd_boxplot.png}
+\caption{JSD distributions across 100 threads for sentiment, political leaning, and emotion.}
+\label{fig:jsd_boxplot}
+\end{figure}
+
+\subsection{Sentiment Bias Analysis}
+
+A critical requirement of the simulation is the absence of systematic directional bias. The mean per-thread sentiment residual (simulated mean minus real mean, on a $[-1, +1]$ scale) was $+0.025 \pm 0.351$. The Wilcoxon signed-rank test yielded $W = 2386.0$, $p = 0.633$, indicating that the observed residuals are statistically indistinguishable from zero. The simulation does not exhibit a systematic tendency to produce more positive or more negative content than the real threads.
+
+This result represents a substantial improvement over the initial pipeline, which exhibited a mean residual of $-0.390$ and a Wilcoxon $p = 4.27 \times 10^{-18}$ (Section~4.5.1). The prompt engineering changes described in Section~4.5.2 successfully eliminated the systematic negative bias.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/01_sentiment_residual_histogram.png}
+\caption{Distribution of per-thread sentiment residuals (simulated $-$ real). The distribution is centred near zero, confirming the absence of systematic bias.}
+\label{fig:sentiment_residual}
+\end{figure}
+
+\subsection{Aggression Calibration}
+
+The Pearson correlation between real and simulated mean aggression scores across threads was $r = 0.332$, $p < 0.001$. While this represents a statistically significant positive correlation --- threads with more aggressive real participants produce more aggressive simulated output --- the moderate effect size indicates room for improvement in fine-grained hostility calibration.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.75\textwidth]{dissertation_figures/evaluation_100threads/03_aggression_scatter.png}
+\caption{Scatter plot of real vs.\ simulated mean aggression per thread. The positive correlation ($r = 0.332$) confirms that the simulation's hostility level tracks real thread aggression.}
+\label{fig:aggression}
+\end{figure}
+
+\subsection{Overall Accuracy}
+
+The weighted overall accuracy score (Equation~3.1) was computed per thread. The mean overall accuracy across 100 threads was $92.3\% \pm 4.6\%$. When categorised by accuracy band: 97 threads were rated EXCELLENT ($\geq 80\%$), 3 were rated GOOD (60--79\%), and none were rated FAIR or POOR.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/04_overall_accuracy_histogram.png}
+\caption{Distribution of per-thread overall accuracy scores. The strong left skew confirms consistently high performance, with 97\% of threads rated EXCELLENT.}
+\label{fig:accuracy_hist}
+\end{figure}
+
+\subsection{Structural Comparison}
+
+The simulation produced threads with a mean maximum depth of $5.36 \pm 0.87$ (real threads had depth~1, as the dataset records only direct replies). Simulated threads generated an average of 9.75 sub-threads compared to 64.28 in the real data, reflecting the simulation's 10-round limit --- each round produces one wave of replies, whereas real threads accumulate replies over days. The mean simulated post count was 60.97 compared to 65.28 real posts, indicating that the simulation produces a comparable volume of content.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/06_sentiment_distribution_overlay.png}
+\caption{Aggregate sentiment distribution overlay: real (blue) vs.\ simulated (orange) across all 100 threads.}
+\label{fig:sentiment_overlay}
+\end{figure}
+
+% ------------------------------------------
+\section{Composite Fidelity Score}
+\label{sec:fidelity}
+
+To enable a single-number summary of per-thread simulation quality, a composite fidelity score was constructed as a weighted average of five normalised sub-metrics. Each divergence metric was converted to a $[0, 1]$ fidelity score using $1 - \min(v / c, 1)$, where $v$ is the raw metric value and $c$ is a theoretical upper bound (JSD cap $= \ln 2 \approx 0.693$; sentiment residual cap $= 1.0$). Overall accuracy was normalised by dividing by 100.
+
+The composite score was computed as:
+\begin{equation}
+\text{Fidelity} = 0.30 \times f_{\text{sent}} + 0.20 \times f_{\text{emo}} + 0.15 \times f_{\text{pol}} + 0.20 \times f_{\text{res}} + 0.15 \times f_{\text{acc}}
+\end{equation}
+where $f_{\text{sent}}$, $f_{\text{emo}}$, $f_{\text{pol}}$ are the JSD-based fidelity scores for sentiment, emotion, and political leaning respectively, $f_{\text{res}}$ is the absolute sentiment residual fidelity, and $f_{\text{acc}}$ is the normalised overall accuracy.
+
+\subsection{Distribution of Fidelity Scores}
+
+Across 100 threads, the composite fidelity score had a mean of $0.857 \pm 0.106$, with a median of $0.885$. The distribution is negatively skewed (Figure~\ref{fig:fidelity_bell}): the majority of threads cluster in the 0.85--0.97 range, with a small tail of lower-fidelity threads. Of 100 threads, 45 scored $\geq 0.90$ (excellent fidelity), 79 scored $\geq 0.80$, and only 7 scored below $0.70$.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/fidelity_scores/01_fidelity_bell_curve.png}
+\caption{Distribution of composite fidelity scores across 100 threads. The solid line shows the kernel density estimate; the dashed line shows the fitted normal distribution ($\mu = 0.857$, $\sigma = 0.106$).}
+\label{fig:fidelity_bell}
+\end{figure}
+
+The best-performing thread (thread\_073, fidelity $= 0.977$) matched the real distribution almost exactly across all five dimensions. The worst-performing thread (thread\_061, fidelity $= 0.431$) exhibited a large sentiment polarity inversion --- the simulation generated predominantly positive content for a thread that was overwhelmingly negative.
+
+\subsection{Sub-Metric Analysis}
+
+Figure~\ref{fig:sub_metrics} shows the distribution of each sub-metric as a box plot. Political JSD fidelity and overall accuracy are consistently high with tight interquartile ranges. Sentiment JSD and emotion JSD show moderate variance. The absolute sentiment residual exhibits the greatest variance, confirming that sentiment polarity inversion is the primary failure mode of the simulation: when a thread's tone is misjudged, the composite score drops substantially.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/fidelity_scores/04_fidelity_sub_metrics.png}
+\caption{Box plots of the five normalised sub-metrics comprising the composite fidelity score. The sentiment residual sub-metric exhibits the largest variance, identifying polarity inversion as the dominant failure mode.}
+\label{fig:sub_metrics}
+\end{figure}
+
+Figure~\ref{fig:fidelity_ranked} shows all 100 threads ranked by fidelity score, colour-coded by quality tier. The smooth degradation curve confirms that the system does not exhibit bimodal behaviour (i.e., it does not produce either perfect or catastrophic results), but rather degrades gracefully with a long tail of progressively harder threads.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{dissertation_figures/fidelity_scores/02_fidelity_scores_ranked.png}
+\caption{All 100 threads ranked by composite fidelity score. Green: excellent ($\geq 0.90$); blue: good ($0.80$--$0.89$); amber: fair ($0.70$--$0.79$); red: poor ($< 0.70$). The dashed line indicates the mean; the shaded band indicates $\pm 1$ standard deviation.}
+\label{fig:fidelity_ranked}
+\end{figure}
+
+% ------------------------------------------
+\section{Parameter Sensitivity Analysis}
+\label{sec:ablation_eval}
+
+The ablation study evaluated 21 configurations across 10 threads each (210 total simulations). Each configuration was scored on a composite metric incorporating sentiment JSD, temporal decay, lexical diversity (TTR), semantic drift, emotion trajectory, Gini coefficient, Spearman rank correlation, and stance consistency. The full leaderboard is shown in Table~\ref{tab:ablation}.
+
+\begin{table}[ht]
+\centering
+\caption{Top 10 ablation configurations ranked by composite score.}
+\label{tab:ablation}
+\begin{tabular}{clc}
+\toprule
+\textbf{Rank} & \textbf{Configuration} & \textbf{Composite Score} \\
+\midrule
+1 & 0-shot baseline (no vocab)      & 0.780 \\
+2 & Reply probability = 0.02        & 0.777 \\
+3 & Old Rule 6 (hostile phrasing)    & 0.773 \\
+4 & No dynamic scaling               & 0.755 \\
+5 & Reply probability = 0.10         & 0.714 \\
+6 & Context window = 15 posts        & 0.713 \\
+7 & Temperature = 1.2                & 0.694 \\
+8 & Old 4-tier aggression            & 0.677 \\
+9 & Max tokens = 80                  & 0.634 \\
+10 & Aggressive realist (multi-param) & 0.631 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Key Findings}
+
+The top three configurations scored within 0.007 of each other (0.773--0.780), indicating that the optimised baseline is near-optimal and robust to small perturbations. The most impactful parameter changes were:
+
+\begin{enumerate}
+\item \textbf{Vocabulary injection}: Removing vocabulary injection produced the best single-parameter configuration. The injected keyword banks constrained the model's lexical diversity, degrading generalisation.
+\item \textbf{Temperature}: Higher temperature ($1.2$, score $0.694$) substantially outperformed lower temperature ($0.7$, score $0.451$). The increased randomness better captured the variability of real discourse.
+\item \textbf{Context window}: Providing 15 posts of context ($0.713$) significantly outperformed 3 posts ($0.549$), confirming that agents require sufficient conversational context to calibrate their tone.
+\item \textbf{Repetition penalty}: Increasing the repetition penalty from 1.1 to 1.3 degraded performance substantially ($0.429$), likely by disrupting the naturalness of generated text.
+\item \textbf{Simulation length}: Extending from 10 to 20 rounds degraded performance ($0.411$), suggesting that longer simulations accumulate drift from the real distribution.
+\end{enumerate}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{dissertation_figures/parameter_sweep/02_metric_heatmap.png}
+\caption{Heatmap of normalised sub-metric scores across all 21 ablation configurations. Darker cells indicate better performance. The baseline and reply\_prob\_02 configurations show consistently strong performance across all metrics.}
+\label{fig:heatmap}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/parameter_sweep/01_composite_leaderboard.png}
+\caption{Composite scores for all 21 ablation configurations, ranked from best to worst.}
+\label{fig:leaderboard}
+\end{figure}
+
+% ------------------------------------------
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Summary of Results}
+
+The simulation achieves a mean composite fidelity of 0.857 across 100 diverse threads, with 79\% of threads scoring above 0.80 and simulated sentiment distributions that are statistically indistinguishable from real data (Wilcoxon $p = 0.633$). Political alignment is the strongest dimension (mean JSD~$= 0.039$), indicating that the agent DNA profiles derived from real tweet histories effectively capture partisan identity. The 97\% EXCELLENT rating across threads demonstrates that the system generalises beyond the development threads used during parameter tuning.
+
+\subsection{Comparison with Prior Work}
+
+Direct quantitative comparison with other LLM-based social simulation systems is limited by differences in evaluation methodology. The Italian election simulation~\citep{llmitaly} reported a median Spearman correlation of 0.85 for inter-group engagement patterns on Bluesky. The present system achieves a mean Spearman $r$ of 0.927 (ablation baseline) for participation rank correlation within threads, using a different metric but suggesting competitive structural fidelity. Unlike the Italian election work, which focused on group-level engagement, this system validates at the individual thread level across multiple distributional dimensions simultaneously.
+
+Traditional opinion dynamics models (Deffuant et al., 2000; Hegselmann \& Krause, 2002) provide mathematical frameworks for opinion evolution but do not produce text, making direct metric comparison impossible. The key advantage of the present LLM-based approach is that it generates natural language output that can be evaluated using the same automated tools applied to real social media data, enabling empirical validation that purely mathematical models cannot support.
+
+\subsection{Failure Modes}
+
+The principal failure mode, identified through the sub-metric analysis (Figure~\ref{fig:sub_metrics}), is sentiment polarity inversion. In 7 of 100 threads (fidelity $< 0.70$), the simulation generated content with the opposite dominant sentiment to the real thread. Analysis of these threads reveals they typically involve unexpected sentiment patterns --- for example, threads where a politically charged topic elicits predominantly positive real replies due to rallying effects or humour. The 0-shot simulation, lacking access to real reply data, defaults to the model's prior expectation of political discourse tone, which is predominantly negative.
+
+\subsection{Limitations}
+
+Several limitations should be noted. First, all evaluation relies on automated classifiers rather than human judgement; to the extent that the RoBERTa models produce systematic errors, these errors propagate equally into both real and simulated evaluations, potentially masking true disagreements. Second, the simulation was evaluated against a single dataset (USC~X~24) from a specific temporal and political context (the 2024 US presidential election); generalisability to other platforms, languages, or political cultures has not been tested. Third, the composite fidelity metric assigns fixed weights to sub-metrics, and alternative weightings could produce different rankings. Fourth, the system uses a single LLM (Dolphin-Llama3 8B); testing across multiple model architectures and sizes would strengthen claims about the approach's generalisability versus its dependence on a specific model.
 
 % ==========================================
 % CHAPTER 6: CONCLUSIONS

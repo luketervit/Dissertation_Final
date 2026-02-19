@@ -7,8 +7,6 @@ Last updated: 18 Feb 2026
 1. QUICK FIXES (do first)
 ========================================
 
-[ ] Compile dissertation.tex and check page count (40-page limit)
-[ ] Update title (currently "This is the Project Title")
 [ ] Fix Chapter 2 section titles — they're from a wrong template:
       - "The Problem of Academic Expertise Discovery" → something like "Political Content and Online Influence"
       - "Advances in Semantic Retrieval" → "Political Persuasion on Social Media"
