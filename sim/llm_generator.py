@@ -90,14 +90,39 @@ class LLMGenerator:
         self.max_tokens = config.get('max_tokens', 150)
 
         # Initialize client based on provider
-        if self.provider == "openai":
-            api_key = os.getenv(config['api_key_env'])
+        if self.provider in {"openai", "deepseek"}:
+            api_key_env = config.get('api_key_env')
+            if api_key_env:
+                api_key = os.getenv(api_key_env)
+            else:
+                # Sensible defaults when api_key_env isn't provided.
+                api_key = os.getenv(
+                    "OPENAI_API_KEY" if self.provider == "openai"
+                    else "DEEPSEEK_API_KEY"
+                )
             if not api_key:
+                env_name = (
+                    api_key_env
+                    if api_key_env
+                    else (
+                        "OPENAI_API_KEY"
+                        if self.provider == "openai"
+                        else "DEEPSEEK_API_KEY"
+                    )
+                )
                 raise ValueError(
-                    f"Environment variable {config['api_key_env']} not set"
+                    f"Environment variable {env_name} not set"
                 )
             from openai import OpenAI
-            self.client = OpenAI(api_key=api_key)
+            if self.provider == "deepseek":
+                base_url = config.get("base_url", "https://api.deepseek.com")
+                # Allow runtime override from environment if configured.
+                base_url_env = config.get("base_url_env")
+                if base_url_env and os.getenv(base_url_env):
+                    base_url = os.getenv(base_url_env)
+                self.client = OpenAI(api_key=api_key, base_url=base_url)
+            else:
+                self.client = OpenAI(api_key=api_key)
 
         elif self.provider == "anthropic":
             api_key = os.getenv(config['api_key_env'])
@@ -184,7 +209,7 @@ class LLMGenerator:
         )
 
         # Generate based on provider
-        if self.provider == "openai":
+        if self.provider in {"openai", "deepseek"}:
             raw = self._generate_openai(system_prompt, user_prompt)
         elif self.provider == "anthropic":
             raw = self._generate_anthropic(system_prompt, user_prompt)
