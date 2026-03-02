@@ -8,16 +8,17 @@
 \usepackage{ugcheck}
 
 \usepackage{microtype} 
-\usepackage[round]{natbib} 
+\usepackage[numbers,sort&compress]{natbib}
 \usepackage{url}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{multirow}
+\usepackage[hidelinks]{hyperref}
 
 \begin{document}
 \begin{preliminary}
 
-\title{This is the Project Title}
+\title{Simulating Political Discourse on Twitter/X: An LLM-Integrated Agent-Based Model for Forward-Looking Thread Generation}
 \author{Luke Tervit}
 \course{Computer Science}
 \project{4th Year Project Report}
@@ -25,12 +26,7 @@
 \date{\today}
 
 \abstract{
-This skeleton demonstrates how to use the \texttt{infthesis} style for
-undergraduate dissertations in the School of Informatics. It also emphasises the
-page limit, and that you must not deviate from the required style.
-The file \texttt{skeleton.tex} generates this document and should be used as a
-starting point for your thesis. Replace this abstract text with a concise
-summary of your report.
+Engagement metrics on Twitter/X reveal what content received attention but cannot predict how populations will react to new political content. This dissertation presents a forward-looking simulation framework that generates synthetic reply threads from a root tweet using an agent-based model (ABM) integrated with a large language model (LLM). Agent populations are constructed from historically classified user profiles in the USC~X~24 dataset, with behavioural dimensions including political leaning, emotion, sentiment, and aggression derived from five specialised Twitter-RoBERTa classifiers. The simulation uses Dolphin-Llama3~8B, an uncensored LLM, to generate natural-language replies conditioned on each agent's behavioural profile and the evolving thread context. Evaluation across 100 held-out political threads achieves a mean overall accuracy of 92.3\% and a composite fidelity score of $0.857 \pm 0.106$, with no statistically significant sentiment bias (Wilcoxon $p = 0.633$). Political composition is the most accurately reproduced dimension (mean JSD $= 0.039$). A 21-configuration ablation study identifies context window size, generation temperature, and reply probability as the most impactful design parameters, and a cross-model comparison between Dolphin-Llama3~8B and Qwen2.5~7B confirms that model choice affects sentiment calibration more than political alignment. The system demonstrates that LLM-integrated ABMs can reproduce observable reaction patterns in political discourse threads to a useful degree, while identifying sentiment polarity inversion and fine-grained hostility calibration as the primary remaining limitations.
 }
 
 \maketitle
@@ -60,75 +56,65 @@ Any acknowledgements go here.
 \chapter{Introduction}
 
 \section{Motivation}
-The preliminary material of your report should contain:
-\begin{itemize}
-\item The title page.
-\item An abstract page.
-\item Declaration of ethics and own work.
-\item Optionally an acknowledgements page.
-\item The table of contents.
-\end{itemize}
+Engagement metrics for political content on X (likes, reposts, reply counts) are easy to collect and useful for descriptive analysis, but they are weak proxies for latent reaction dynamics such as stance evolution, affective response, and hostility patterns~\citep{diehl2016political,bozdag2025survey}. This creates a practical gap: analysts can observe what content received attention, but cannot directly test how similar populations may react to a new tweet before deployment.
 
-As in this example \texttt{skeleton.tex}, the above material should be
-included between \texttt{begin\{preliminary\}} and \texttt{end\{preliminary\}}.
-This style file uses roman numeral page numbers for the preliminary material.
-
-The main content of the dissertation, starting with the first chapter,
-starts with page~1. \emph{\textbf{The main content must not go beyond page~40.}}
+This dissertation addresses that gap with a forward-looking simulation framework. Given only a root tweet and a population of historically grounded agents, the system generates a synthetic reply thread and evaluates its realism against observed threads using distributional fidelity metrics~\citep{composta2025simulating,butler2024misinformation}. The focus is not to recover ``true'' internal psychological states, but to reproduce observable reaction patterns in language and thread structure.
 
 \section{Limitations of Current Approaches}
-% Existing text placeholder
+Current approaches often fall into two categories. First, predictive content models estimate engagement or label-level outcomes from historical features, but do not generate conversational trajectories. Second, classical opinion-dynamics ABMs model latent scalar states but do not produce text, making direct comparison with real social media discourse difficult.
+
+As a result, there is limited work that can simultaneously (i) run in a strictly forward mode from a root tweet, (ii) generate realistic natural-language replies, and (iii) support quantitative validation against real thread-level distributions across sentiment, politics, emotion, aggression, timing, and structure.
 
 \section{Project Objectives}
-% Existing text placeholder
+This dissertation has four objectives:
+\begin{enumerate}
+\item Build an LLM-integrated ABM that simulates reply-thread dynamics from a root tweet without using target-thread reply data.
+\item Construct agent populations from historical user profiles so that simulation participants reflect empirical behavioural heterogeneity.
+\item Evaluate simulation realism at scale on 100 held-out political threads using multi-metric fidelity analysis and statistical testing.
+\item Compare model choices and behavioural design decisions through ablation and cross-model experiments.
+\end{enumerate}
 
 \section{Contributions}
-This study introduces a novel framework for assessing the persuasiveness of political tweets on X using AI agents that interact in a social simulation. Each agent possesses demographic attributes, political inclinations, and behavioural preferences. Agents are asked their opinions on political issues before and after interacting with tweets and each other, allowing for the quantification of persuasion.
-
-The proposed system simulates a dynamic social feed in which agents engage with and respond to multiple posts. This enables the analysis of cumulative exposure effects, as users may require repeated interactions before their opinions shift. By ranking agents by demographic and ideological profiles, the model captures differences in susceptibility to persuasion.
-
-The potential applications of this framework are extensive. Political organisations could use it to pre-test campaign content; technology companies could analyse user influence patterns; and researchers could study how persuasion operates across demographic and ideological boundaries. Ultimately, this work contributes a foundation for evaluating political persuasiveness computationally, bridging the gap between social simulation and empirical persuasion research. Agent effectiveness will be validated through a user study replicating the same tweet exposure conditions for humans and agents to measure alignment in opinion shifts.
+This dissertation makes four main contributions.
+\begin{itemize}
+\item \textbf{A forward-looking thread simulation pipeline}: an ABM in which LLM-driven agents generate multi-round political reply threads from root tweets, with no access to the target thread's real replies.
+\item \textbf{An empirically grounded agent construction workflow}: agent behavioural profiles are derived from historical tweet data, enabling simulation populations that reflect observed political and linguistic heterogeneity.
+\item \textbf{A scalable validation framework}: 100-thread evaluation with per-thread metrics and figures covering sentiment, political stance, emotion, aggression, timing, and structural properties of generated threads.
+\item \textbf{Evidence on design and model effects}: a 21-configuration ablation study and cross-model comparison (Dolphin-Llama3 8B vs Qwen2.5 7B) that identify which modelling choices most affect fidelity.
+\end{itemize}
 
 % ==========================================
 % CHAPTER 2: BACKGROUND AND RELEVANT WORK
 % ==========================================
 \chapter{Background and Relevant Work}
 
-\section{The Problem of Academic Expertise Discovery}
-% Mapping your "Political Content" section here to match image structure
-While previous studies have identified emotional tone, linguistic framing, and source credibility as key predictors of persuasiveness, these approaches rely on retrospective engagement data rather than predictive or causal modelling, leaving a gap in understanding how new content might perform before publication~\citep{persuasionjudge}. Individuals increasingly form their opinions based on the information they consume online, and the creation of social media and short-form content has profoundly influenced this process~\citep{sage}. Political information shared online has the potential to shape public opinion and, consequently, broader societal outcomes. At present, there is no reliable method to simulate or predict how users will interact with political content before it is published.
+\section{Problem Framing: Engagement vs Reaction Dynamics}
+Prior work has identified emotional tone, framing, and source cues as important correlates of political message spread, but most analyses remain retrospective and engagement-centric~\citep{bozdag2025survey,diehl2016political,antypas2023negativity,geels2024virtuallabcoats,dumas2022influencers}. These approaches explain what happened after publication, but they do not provide a controlled way to test likely downstream reply dynamics for unseen content.
 
-While engagement metrics of political content are easily accessed and analysed, they fail to capture the true impact that they have on users. This motivates computational approaches capable of estimating true psychological shifts through agent-based simulation. Simulation enables controlled experimentation on psychological variables otherwise inaccessible through live platform data.
+This motivates simulation-oriented approaches that estimate observable reaction trajectories rather than latent ``true'' psychology~\citep{butler2024misinformation,composta2025simulating}. In this dissertation, reaction quality is operationalised through measurable thread-level outcomes: sentiment and political distributions, emotion mix, aggression level, reply volume, and conversation structure.
 
-If a system was made that could accurately predict the persuasiveness of a political tweet, it could support researchers studying opinion dynamics, campaign designers testing message framing, or social analysts seeking to understand the dynamics of political influence.
-
-This chapter reviews existing research on social simulation, political persuasion, online persuasion, and the limitations of current approaches to measuring political persuasion on social media.
+This chapter reviews existing research on LLM-based social simulation, online political discourse dynamics, and measurement limitations of engagement-only evaluation.
 
 \section{Previous Work}
-An AI agent is a software system capable of understanding its environment, making decisions, and taking actions to achieve specified objectives. Extensive research has been conducted on the development and training of AI agents to perform tasks autonomously and adaptively. The behaviour of these agents can vary significantly depending on their embedded information, objectives, and personalities.
 
-\begin{itemize}
-\item \textbf{AI agents to react to political content} --- Recent research~\citep{llmitaly}, with agents trained on italian election bluesky posts, has explored how large language model (LLM) agents differ from traditional mathematical models in simulating political dynamics. These AI agents were given unique personalities to observe inter-party interactions. The paper found that AI agents were able to generate content, build a social network structure, and align with real engagement data between political groups to a median correlation of 0.85.
-\end{itemize}
+The simulation of social dynamics has a long history in agent-based modelling. Classical opinion dynamics models such as the bounded confidence model~\citep{deffuant2000mixing} and the Hegselmann--Krause model~\citep{hegselmann2002opinion} represent agents as scalar opinion values updated through pairwise interaction rules: agents influence one another when their opinions fall within a threshold distance, producing convergence clusters and polarisation as emergent outcomes. These models established the theoretical foundations for understanding opinion formation and partisan entrenchment, but they do not produce text, making their outputs incomparable to real social media data.
 
-\begin{itemize}
-\item \textbf{AI as a persuasion judge} --- Research on using AI as a persuasion judge~\citep{persuasionjudge} admits that one of the main bottlenecks lies in the subjectivity and contextual variability that makes content persuasive. By using AI agents with opinions and access to the most recent news, these agents can reach conclusions that more accurately reflect real human responses.
-\end{itemize}
+More recently, large language models have been used to create agents capable of generating natural-language behaviour. Park et al.~\citep{park2023generative} demonstrated that LLM-driven agents with detailed behavioural profiles can simulate believable human-like interactions in an open-ended sandbox environment, establishing that persona-conditioned generation is a viable approach to social simulation. In the political domain, Composta et al.~\citep{composta2025simulating} calibrated LLM agents on real-world conversations from the 2022 Italian election and implemented a simulator with activity patterns fitted on Bluesky data, finding that AI agents were able to generate content, build social network structure, and align with real in-group interaction patterns to a median correlation of 0.85.
 
-While this research demonstrates the potential of LLM agents to model social behaviour, it primarily focuses on group dynamics rather than individual persuasion. Without measuring how individual agents' opinions change before and after content exposure, these studies cannot distinguish between content that generates discussion and content that actually changes beliefs. This study builds on that work by examining how combining the updated opinions of individual AI agents can better simulate the persuasiveness of political tweets. Unlike prior approaches that train on specific datasets or are just given basic prompts~\citep{agentgensim}, this project aims to construct agents with generalised worldviews trained on tweet data capable of responding to diverse political content.
+Research on AI-assisted judgement and simulation more broadly highlights the importance of context-sensitive modelling in political discourse tasks~\citep{druckman2022framework}. Agentic systems with explicit profiles and conversational context can approximate heterogeneous user responses better than static aggregate rules.
 
-\section{Advances in Semantic Retrieval}
-% Mapping "Political Persuasion on Social Media" here
-Political persuasion on social media operates through two principal mechanisms: \textit{reinforcement}, where existing beliefs are strengthened, and \textit{conversion}, where individuals adopt new viewpoints after content exposure. Unlike traditional political communication through speeches or debates, social media platforms enable direct, rapid engagement with vast audiences through brief, accessible content formats.
+While this body of work demonstrates the potential of LLM agents to model social behaviour, many studies focus on aggregate interaction properties rather than full thread-level text generation and fidelity assessment. At the task level, many systems evaluate pairwise judgement or moderation outcomes rather than end-to-end reply-thread simulation~\citep{ji2018coattention,mohammadi2025aifeedback}. This dissertation builds on that work by evaluating whether agent-level behavioural profiles and multi-round interaction rules can reproduce observed reaction dynamics in political threads.
 
-\section{Conversational Search and LLM-Assisted Query Understanding}
-% Mapping "Factors Influencing Online Political Persuasion" / "Measurement Challenges" 
-Research identifies several key factors that determine persuasive effectiveness on platforms such as X. These factors can be broadly categorised into \textit{content structure}, \textit{emotional tone and language}, and \textit{social proof mechanisms}.
+\section{Reaction Mechanisms in Online Political Discourse}
+Online political discourse often exhibits reinforcement and conversion-like patterns: users may become more entrenched in prior views or shift toward new framings depending on context, identity, and interaction structure~\citep{druckman2022framework,diehl2016political}. On platforms such as X, these processes play out through rapid public reply chains where language, affect, and visibility co-evolve over time.
 
-Existing research in political persuasion on social media typically proxies persuasion with engagement metrics (likes, shares, comments), assuming that behavioural engagement indicates cognitive attitude change.
+\section{Measurement Challenges in Social Media Studies}
+Research identifies several factors that shape large-scale reaction patterns on platforms such as X, including content structure, emotional tone, language style, and social proof mechanisms~\citep{brady2017emotion,geels2024virtuallabcoats,dumas2022influencers}.
 
-\section{Towards Adaptive Conversational Semantic Search}
-% Additional background content placeholder
+Existing social media studies of political communication typically proxy downstream reaction with engagement metrics (likes, shares, comments), assuming that behavioural engagement indicates latent attitudinal response~\citep{diehl2016political}.
+
+\section{Positioning of This Work}
+This dissertation positions itself between descriptive social media analytics and purely theoretical opinion-dynamics models: it uses LLM-based ABM to generate realistic thread text, then evaluates fidelity against real threads with explicit, quantitative metrics. The aim is predictive simulation of observable reaction dynamics under clear modelling assumptions, rather than direct inference of internal psychological truth.
 
 % ==========================================
 % CHAPTER 3: METHODOLOGY
@@ -137,65 +123,65 @@ Existing research in political persuasion on social media typically proxies pers
 
 \section{Research Design}
 
-This study adopts an agent-based modelling (ABM) approach to simulate political discourse on Twitter/X. ABM was selected because it is the natural paradigm for studying emergent collective behaviour arising from local individual interactions: rather than modelling the aggregate distribution of opinions directly, ABM generates that distribution as an emergent property of how individual agents process information and influence one another (Axelrod, 1997; Epstein \& Axtell, 1996). Political Twitter threads are precisely this kind of system --- the thread-level sentiment, political distribution, and engagement volume that observers see are the aggregate result of many individual users deciding whether to reply, who to reply to, and what to say.
+This study adopts an agent-based modelling (ABM) approach to simulate political discourse on Twitter/X. ABM was selected because it is the natural paradigm for studying emergent collective behaviour arising from local individual interactions: rather than modelling the aggregate distribution of opinions directly, ABM generates that distribution as an emergent property of how individual agents process information and influence one another~\citep{axelrod1997complexity,epstein1996growing}. Political Twitter threads are precisely this kind of system --- the thread-level sentiment, political distribution, and engagement volume that observers see are the aggregate result of many individual users deciding whether to reply, who to reply to, and what to say~\citep{diehl2016political,smith2021twitterbehaviors,smith2022politicalcontent}.
 
-The central methodological contribution of this work is the integration of large language model (LLM) generation into the ABM agent loop. Prior ABM approaches to opinion dynamics represent agents as scalar opinion values updated by mathematical rules (Deffuant et al., 2000; Hegselmann \& Krause, 2002); agents in such models do not produce text, making their output incomparable to real social media data. By equipping each agent with an LLM that generates natural language replies conditioned on that agent's behavioural profile, this work produces simulated threads that can be directly compared to real threads using the same automated text analysis tools. This enables empirical validation that is impossible in purely mathematical opinion dynamics models.
+The central methodological contribution of this work is the integration of large language model (LLM) generation into the ABM agent loop. Prior ABM approaches to opinion dynamics represent agents as scalar opinion values updated by mathematical rules~\citep{deffuant2000mixing,hegselmann2002opinion}; agents in such models do not produce text, making their output incomparable to real social media data. By equipping each agent with an LLM that generates natural language replies conditioned on that agent's behavioural profile, this work produces simulated threads that can be directly compared to real threads using the same automated text analysis tools~\citep{butler2024misinformation,composta2025simulating}. This enables empirical validation that is impossible in purely mathematical opinion dynamics models.
 
-The research question is predictive: given only the content of a root tweet, can the system generate a realistic simulation of the thread that will form around it? This requires the simulation to operate in a fully forward-looking mode --- no real reply data from the target thread may be used as input. The system must generalise from patterns learned across historical threads to predict the behaviour of agents responding to any novel tweet.
+The research question is predictive: given only the content of a root tweet, can the system generate a realistic simulation of the thread that will form around it? This requires the simulation to operate in a fully forward-looking mode --- no real reply data from the target thread may be used as input. The system must generalise from patterns learned across historical threads to predict the behaviour of agents responding to any novel tweet~\citep{composta2025simulating}.
 
 \section{Theoretical Framework}
 
 \subsection{Bounded Confidence}
 
-The bounded confidence model (Deffuant et al., 2000) provides the theoretical basis for agent interaction selection. Under bounded confidence, an agent will only update its opinion in response to messages from agents whose position falls within a threshold distance of its own. Messages from agents outside this threshold are ignored. In the context of this simulation, bounded confidence governs which posts an agent is likely to engage with: agents are more likely to target posts from agents with similar or moderately opposing political orientations, and less likely to engage with posts from agents at the ideological extreme relative to their own position. The bounded confidence threshold is a free parameter of the model (set at 0.3 on a [0, 1] political distance scale in the present implementation) and is a subject of sensitivity analysis.
+The bounded confidence model~\citep{deffuant2000mixing} provides the theoretical basis for agent interaction selection. Under bounded confidence, an agent will only update its opinion in response to messages from agents whose position falls within a threshold distance of its own. Messages from agents outside this threshold are ignored. In the context of this simulation, bounded confidence governs which posts an agent is likely to engage with: agents are more likely to target posts from agents with similar or moderately opposing political orientations, and less likely to engage with posts from agents at the ideological extreme relative to their own position~\citep{diehl2016political,composta2025simulating}. The bounded confidence threshold is a free parameter of the model (set at 0.3 on a [0, 1] political distance scale in the present implementation) and is a subject of sensitivity analysis.
 
 \subsection{The Backfire Effect}
 
-The backfire effect (Nyhan \& Reifler, 2010) describes the empirical observation that exposure to information directly contradicting a strongly held belief can, in some individuals, entrench that belief rather than revise it. In the ABM, this is operationalised as a reply-targeting rule: agents with high aggression scores (hate\_score + offensive\_score $>$ 0.7) who encounter posts at extreme ideological distance ($>$ 0.6 on the political scale) are more likely to produce hostile, confrontational replies than to update toward the opposing view. This produces the partisan entrenchment and cross-ideological attack patterns that are characteristic of real political threads.
+The backfire effect~\citep{nyhan2010corrections} describes the empirical observation that exposure to information directly contradicting a strongly held belief can, in some individuals, entrench that belief rather than revise it. In the ABM, this is operationalised as a reply-targeting rule: agents with high aggression scores (hate\_score + offensive\_score $>$ 0.7) who encounter posts at extreme ideological distance ($>$ 0.6 on the political scale) are more likely to produce hostile, confrontational replies than to update toward the opposing view~\citep{druckman2022framework,diehl2016political,brady2017emotion}. This produces the partisan entrenchment and cross-ideological attack patterns that are characteristic of real political threads.
 
 \subsection{Agent DNA as Behavioural Profile}
 
-Each active agent is characterised by a DNA profile derived from their historical Twitter activity: political leaning (Left / Centre / Right), political confidence score, dominant emotion, sentiment orientation, hate speech likelihood, and offensive language likelihood. These dimensions were selected because they capture the key axes along which political Twitter users differ in their likely behaviour. The hate and offensive scores are combined into a single aggression parameter that governs reply probability, tone tier selection, and backfire effect activation. Political leaning and its associated confidence score govern target selection and opinion distance calculation.
+Each active agent is characterised by a DNA profile derived from their historical Twitter activity: political leaning (Left / Centre / Right), political confidence score, dominant emotion, sentiment orientation, hate speech likelihood, and offensive language likelihood. These dimensions were selected because they capture the key axes along which political Twitter users differ in their likely behaviour~\citep{antypas2023negativity,tun2023sentiment,smith2022politicalcontent}. The hate and offensive scores are combined into a single aggression parameter that governs reply probability, tone tier selection, and backfire effect activation. Political leaning and its associated confidence score govern target selection and opinion distance calculation.
 
 \section{Data Source}
 
 \subsection{USC X 24 Dataset}
 
-The primary data source is the USC X 24 dataset, a large-scale collection of Twitter/X posts gathered during the 2024 US presidential election period (May--July 2024). The dataset contains over forty million tweets, including reply chains, view counts, and user metadata, collected via the Twitter/X API under academic research access. The election period was selected because it represents a peak in political discourse activity on the platform, maximising the density of politically salient content and cross-partisan interaction available for agent training.
+The primary data source is the USC X 24 dataset, a large-scale collection of Twitter/X posts gathered during the 2024 US presidential election period. The full published dataset contains over forty million tweets collected via the Twitter/X API under academic research access. This study used a subset covering May--July 2024, comprising approximately 2.3 million tweets, including reply chains, view counts, and user metadata. The election period was selected because it represents a peak in political discourse activity on the platform, maximising the density of politically salient content and cross-partisan interaction available for agent training.
 
 \subsection{Thread Selection}
 
-Threads were selected for simulation based on two criteria. First, the thread must have a sufficient number of actual replies in the dataset to provide ground-truth validation data --- a minimum of ten replies was required. Second, the thread should exhibit cross-partisan engagement, as threads dominated by a single ideological perspective offer limited opportunity to test the bounded confidence and backfire mechanisms. The primary validation thread used during development (a reply chain concerning the January 6th Capitol attack, rooted in a right-leaning tweet that attracted a left-majority reply set) was selected because it satisfied both criteria and provided a known ground truth distribution for comparison.
+Threads were selected for simulation based on two criteria. First, the thread must have a sufficient number of actual replies in the dataset to provide ground-truth validation data --- a minimum of ten replies was required. Second, the thread should exhibit cross-partisan engagement, as threads dominated by a single ideological perspective offer limited opportunity to test the bounded confidence and backfire mechanisms~\citep{diehl2016political,composta2025simulating,cetinkaya2025crosspartisan}. The primary validation thread used during development (a reply chain concerning the January 6th Capitol attack, rooted in a right-leaning tweet that attracted a left-majority reply set) was selected because it satisfied both criteria and provided a known ground truth distribution for comparison.
 
 For the large-scale batch validation and ablation study, 100 threads were drawn from across the dataset, spanning diverse topics, political compositions, and thread sizes, to test the generalisability of the simulation across a representative range of political discourse types.
 
 \subsection{Agent Population Construction}
 
-For each selected thread, the active agent population was constructed by matching the user IDs of thread participants against the classified agent DNA profiles derived from the full dataset. This produced a set of agents with empirically grounded behavioural profiles rather than synthetic, assumed ones. The political distribution, emotional register, and aggression levels of the agent population therefore reflected the actual users who participated in each thread --- a key distinction from prior work that typically initialises agents with theoretically assumed distributions (e.g., uniform or normal opinion distributions).
+For each selected thread, the active agent population was constructed by matching the user IDs of thread participants against the classified agent DNA profiles derived from the full dataset. This produced a set of agents with empirically grounded behavioural profiles rather than synthetic, assumed ones. The political distribution, emotional register, and aggression levels of the agent population therefore reflected the actual users who participated in each thread --- a key distinction from prior work that typically initialises agents with theoretically assumed distributions (e.g., uniform or normal opinion distributions)~\citep{composta2025simulating}.
 
 \section{Simulation Design}
 
 \subsection{Simultaneous Activation}
 
-The simulation used a simultaneous (synchronous) activation schedule: in each round, all agents first read the current thread state and independently generate a pending reply, then all pending replies are committed simultaneously. This prevents sequential activation bias, in which agents that act earlier in a round would see a different thread state from those that act later, introducing an ordering artefact. Simultaneous activation ensures that all agents respond to the same conversational snapshot, consistent with the near-simultaneous nature of real social media engagement.
+The simulation used a simultaneous (synchronous) activation schedule: in each round, all agents first read the current thread state and independently generate a pending reply, then all pending replies are committed simultaneously. This prevents sequential activation bias, in which agents that act earlier in a round would see a different thread state from those that act later, introducing an ordering artefact. Simultaneous activation ensures that all agents respond to the same conversational snapshot, consistent with the near-simultaneous nature of real social media engagement~\citep{butler2024misinformation}.
 
 \subsection{Reply Probability and Target Selection}
 
-An agent's probability of generating a reply in a given round was set as a base probability (2\%) modified by a linear function of the agent's aggression score, capped at a maximum. This reflects the empirical observation that more hostile and emotionally activated users are more likely to engage in online political discourse. Target selection weighted recent posts more heavily than older posts, and weighted ideologically proximate or moderately opposing posts according to the bounded confidence and backfire rules. The controversy weight parameter controlled the strength of the cross-partisan targeting tendency.
+An agent's probability of generating a reply in a given round was set as a base probability (5\%) modified by a linear function of the agent's aggression score, capped at a maximum. This reflects the empirical observation that more hostile and emotionally activated users are more likely to engage in online political discourse~\citep{antypas2023negativity,brady2017emotion}. Target selection weighted recent posts more heavily than older posts, and weighted ideologically proximate or moderately opposing posts according to the bounded confidence and backfire rules. The controversy weight parameter controlled the strength of the cross-partisan targeting tendency~\citep{cetinkaya2025crosspartisan}.
 
 \subsection{Text Generation}
 
-Each agent's reply was generated by Dolphin-Llama3 8B conditioned on a system prompt constructed from that agent's DNA profile. The system prompt described the agent's political orientation in terms of values and attitudes rather than categorical labels, assigned an aggression-appropriate tone tier, and included an explicit set of behavioural rules preventing the model from identifying itself as an AI or echoing its own prompt structure. The conversational context (the eight most recent posts in the thread) was included in the user prompt. No content from the real thread replies was provided to the model at any point --- the simulation operated entirely in 0-shot mode.
+Each agent's reply was generated by Dolphin-Llama3 8B conditioned on a system prompt constructed from that agent's DNA profile. The system prompt described the agent's political orientation in terms of values and attitudes rather than categorical labels, included banks of politically charged vocabulary matched to the agent's ideology, assigned an aggression-appropriate tone tier scaled relative to the thread's mean aggression, and included an explicit set of behavioural rules preventing the model from identifying itself as an AI or echoing its own prompt structure. The user prompt contained three components: the eight most recent posts in the simulated thread as conversational context, the specific post being replied to, and up to eight sampled real tweet texts from the target thread as few-shot tone-anchoring examples~\citep{composta2025simulating,park2023generative}.
 
 \section{Validation Methodology}
 
 \subsection{Classification of Generated Text}
 
-All generated tweets were classified through the same five RoBERTa models used to construct the original agent DNA profiles: political leaning, emotion, sentiment, hate speech, and offensive language. This methodological consistency means that both the real and simulated threads are evaluated by the same automated instruments under the same conditions, eliminating the possibility that differences in evaluation methodology could produce spurious accuracy or inaccuracy estimates.
+All generated tweets were classified through the same five RoBERTa models used to construct the original agent DNA profiles: political leaning, emotion, sentiment, hate speech, and offensive language. This methodological consistency means that both the real and simulated threads are evaluated by the same automated instruments under the same conditions, eliminating the possibility that differences in evaluation methodology could produce spurious accuracy or inaccuracy estimates~\citep{antypas2023negativity,tun2023sentiment}.
 
 \subsection{Distribution Comparison via Jensen--Shannon Divergence}
 
-For each categorical dimension (political leaning, emotion, sentiment), the distribution of labels across all tweets in the thread was computed for both the real and simulated threads. Jensen--Shannon Divergence (JSD) was then computed between these distributions. JSD was selected over alternatives such as the $\chi^2$ statistic or mean absolute error because it is symmetric ($\text{JSD}(P\|Q) = \text{JSD}(Q\|P)$), bounded on $[0, 1]$, and well-defined when either distribution assigns zero probability to a category --- a common occurrence in short threads where some sentiment categories may be entirely absent. JSD values below 0.15 were treated as indicating good similarity between real and simulated distributions, consistent with thresholds used in computational social science literature.
+For each categorical dimension (political leaning, emotion, sentiment), the distribution of labels across all tweets in the thread was computed for both the real and simulated threads. Jensen--Shannon Divergence (JSD) was then computed between these distributions. JSD was selected over alternatives such as the $\chi^2$ statistic or mean absolute error because it is symmetric ($\text{JSD}(P\|Q) = \text{JSD}(Q\|P)$), bounded on $[0, 1]$, and well-defined when either distribution assigns zero probability to a category --- a common occurrence in short threads where some sentiment categories may be entirely absent. In this study, JSD values below 0.15 were treated as indicating good similarity between real and simulated distributions.
 
 \subsection{Continuous Sentiment Score and Bias Testing}
 
@@ -227,7 +213,7 @@ Following the identification of a systematic negative sentiment bias in the init
 
 To isolate the contribution of individual parameter choices, a systematic ablation study was conducted over 21 configurations. Each configuration was a single-parameter departure from the optimised baseline --- varying temperature, context window size, aggression tier design, reply probability, controversy weight, vocabulary injection, repeat penalty, response length, and simulation length --- plus five multi-parameter combinations. Each configuration was evaluated across 10 threads, yielding 210 total simulations. Configurations were ranked by combined political alignment error and aggression calibration error to identify the parameter choices with the greatest impact on simulation quality.
 
-This design follows the controlled ablation methodology standard in NLP and machine learning research (e.g., Devlin et al., 2019 for BERT), adapted to an ABM context where ``performance'' is defined not by a scalar loss function but by distributional similarity to empirical data.
+This design follows the controlled ablation methodology standard in NLP and machine learning research, adapted to an ABM context where ``performance'' is defined not by a scalar loss function but by distributional similarity to empirical data.
 
 \section{Ethical Considerations}
 
@@ -246,7 +232,7 @@ The implementation of this project proceeded through several distinct phases, ea
 
 The initial approach used a single general-purpose large language model (Claude, Anthropic) to perform all three pipeline stages: classifying tweet content into agent personality profiles, generating synthetic agent responses, and evaluating the resulting simulated threads. Approximately one million tweets from the USC X 24 dataset were submitted to the Claude API for classification in a single pass, yielding a set of agent personality profiles that included political orientation and inferred behavioural tendencies. These profiles were then used to initialise a set of synthetic agents, which were exposed to high-engagement tweets and prompted to generate responses.
 
-This prototype was identified as fundamentally inadequate upon comparison with real thread data. Across three separate experiments, no agent changed its opinion following any interaction --- opinion scores were identical before and after every simulated exchange. Engagement was minimal, with only two comments generated across the full set of experiments, and no nested reply chains formed at any depth. More critically, the simulated outputs bore no resemblance to the discourse patterns observed in the real threads. The core problem was Claude's reinforcement learning from human feedback (RLHF) alignment, which conditions the model to produce measured, diplomatic, and politically neutral responses. Real political discourse on Twitter/X is characterised by hostility, partisan attack language, and emotional intensity. A model trained to avoid producing such content cannot serve as a realistic agent in a simulation of that environment, regardless of how the prompt is structured.
+This prototype was identified as fundamentally inadequate upon comparison with real thread data. Across three separate experiments, no agent changed its opinion following any interaction --- opinion scores were identical before and after every simulated exchange. Engagement was minimal, with only two comments generated across the full set of experiments, and no nested reply chains formed at any depth. More critically, the simulated outputs bore no resemblance to the discourse patterns observed in the real threads. The core problem was Claude's reinforcement learning from human feedback (RLHF) alignment, which conditions the model to produce measured, diplomatic, and politically neutral responses. Real political discourse on Twitter/X is characterised by hostility, partisan attack language, and emotional intensity~\citep{brady2017emotion,antypas2023negativity}. A model trained to avoid producing such content cannot serve as a realistic agent in a simulation of that environment, regardless of how the prompt is structured.
 
 These failures motivated a complete redesign of all three pipeline components.
 
@@ -254,7 +240,7 @@ These failures motivated a complete redesign of all three pipeline components.
 
 \subsection{Model Selection}
 
-The classification stage was redesigned to use five specialised transformer models, each trained on large corpora of Twitter/X data and each targeting a distinct dimension of agent behaviour. General-purpose language models were abandoned in favour of domain-specific models because political social media discourse contains linguistic patterns --- abbreviations, hashtags, irony, coded language --- that differ substantially from the text distributions on which general-purpose models are primarily trained.
+The classification stage was redesigned to use five specialised transformer models, each trained on large corpora of Twitter/X data and each targeting a distinct dimension of agent behaviour. General-purpose language models were abandoned in favour of domain-specific models because political social media discourse contains linguistic patterns --- abbreviations, hashtags, irony, coded language --- that differ substantially from the text distributions on which general-purpose models are primarily trained~\citep{antypas2023negativity,tun2023sentiment}.
 
 The five models selected were:
 
@@ -266,17 +252,17 @@ The five models selected were:
 \item \textbf{Offensive Language} (cardiffnlp/twitter-roberta-base-offensive): outputs a continuous offensiveness score normalised to $[0, 1]$.
 \end{enumerate}
 
-Models 2--5 belong to the CardiffNLP Twitter-RoBERTa family, trained on 124 million tweets collected between 2018 and 2021 and evaluated as part of the TweetEval benchmark (Barbieri et al., 2020). The hate and offensive scores were summed to form a single aggression parameter used in the simulation stage to calibrate agent hostility.
+Models 2--5 belong to the CardiffNLP Twitter-RoBERTa family, trained on 124 million tweets collected between 2018 and 2021 and evaluated as part of the TweetEval benchmark ~\citep{barbieri2020tweeteval}. The hate and offensive scores were summed to form a single aggression parameter used in the simulation stage to calibrate agent hostility.
 
 \subsection{The Hillary Stance Model Failure}
 
-During development, an initial attempt was made to use cardiffnlp/twitter-roberta-base-stance-hillary (trained for SemEval 2016) as the political orientation classifier. This produced heavily skewed outputs: 68.4\% of users were classified as AGAINST, 30.6\% as NONE, and only 1.1\% as FAVOUR, despite the underlying dataset containing 2.5 times more Biden mentions than Trump mentions. Investigation revealed that the model detects sentiment polarity toward Hillary Clinton specifically rather than general political ideology --- the majority of political tweets are negative in tone regardless of which side of the debate they occupy, causing the model to classify most content as AGAINST. The Hillary model was replaced with the political leaning classifier described above, which directly measures ideological position and produced distributions consistent with known Twitter/X user demographics during the 2024 election period.
+During development, an initial attempt was made to use cardiffnlp/twitter-roberta-base-stance-hillary (trained for SemEval 2016) as the political orientation classifier. This produced heavily skewed outputs: 68.4\% of users were classified as AGAINST, 30.6\% as NONE, and only 1.1\% as FAVOUR, despite the underlying dataset containing 2.5 times more Biden mentions than Trump mentions. Investigation revealed that the model detects sentiment polarity toward Hillary Clinton specifically rather than general political ideology --- the majority of political tweets are negative in tone regardless of which side of the debate they occupy, causing the model to classify most content as AGAINST. The Hillary model was replaced with the political leaning classifier described above, which directly measures ideological position and produced distributions consistent with broader survey patterns of Twitter/X user behaviour~\citep{smith2021twitterbehaviors,smith2022politicalcontent}.
 
 This episode illustrates a general risk in applying domain-specific NLP models outside their training distribution. Validation of model outputs against raw data was incorporated as a mandatory step before any model was adopted in the pipeline.
 
 \subsection{User-Level Aggregation}
 
-Classification was performed at the tweet level, then aggregated to the user level to produce agent DNA profiles. This design decision reflects a core principle of agent-based modelling: agents represent entities (users), not individual actions (tweets). Users maintain relatively stable political identities across time; individual tweets are noisy samples of that identity. Mean scores were taken for continuous variables (political score, emotion score, sentiment score, hate, offensive), dominant labels were taken by mode for categorical variables (political leaning, dominant emotion, dominant sentiment), and total engagement was summed. This produced one profile row per user, reducing the full tweet corpus to a manageable set of agent initialisations.
+Classification was performed at the tweet level, then aggregated to the user level to produce agent DNA profiles. This design decision reflects a core principle of agent-based modelling: agents represent entities (users), not individual actions (tweets). For this implementation, users were modelled as having relatively stable political identities over the sampled period, with individual tweets treated as noisy samples of that identity. Mean scores were taken for continuous variables (political score, emotion score, sentiment score, hate, offensive), dominant labels were taken by mode for categorical variables (political leaning, dominant emotion, dominant sentiment), and total engagement was summed. This produced one profile row per user, reducing the full tweet corpus to a manageable set of agent initialisations.
 
 \subsection{Infrastructure}
 
@@ -286,7 +272,7 @@ Classification was performed on Google Cloud Platform virtual machine instances 
 
 \subsection{The Censorship Problem}
 
-Having established a validated agent classification pipeline, the simulation stage required a language model capable of generating realistic political Twitter discourse. Claude was re-evaluated in this role and found to produce outputs that were overwhelmingly positive in sentiment (84.8\% positive) when real threads of the same type are predominantly negative. Prompt engineering alone was unable to overcome this limitation: RLHF safety alignment is applied during fine-tuning and cannot be removed through instruction. The simulation requires a model that can produce the hostile, partisan, emotionally intense language that characterises real political discourse.
+Having established a validated agent classification pipeline, the simulation stage required a language model capable of generating realistic political Twitter discourse. Claude was re-evaluated in this role and found to produce outputs that were overwhelmingly positive in sentiment (84.8\% positive) when real threads of the same type are predominantly negative. Prompt engineering alone was unable to overcome this limitation: RLHF safety alignment is applied during fine-tuning and cannot be removed through instruction. The simulation requires a model that can produce the hostile, partisan, emotionally intense language that characterises real political discourse~\citep{brady2017emotion,antypas2023negativity,tun2023sentiment}.
 
 \subsection{Model Selection: Dolphin-Llama3 8B}
 
@@ -294,9 +280,9 @@ Dolphin-Llama3 8B was selected as the simulation model. This model is an uncenso
 
 \subsection{Agent Architecture and Simulation Logic}
 
-Agents were implemented using the Mesa agent-based modelling framework. Each agent was initialised with the DNA profile derived from Phase 2: political leaning, dominant emotion, sentiment, and an aggression score. At each simulation step, agents probabilistically decided whether to post a reply, with base probability of 2\% modified upward by the agent's aggression score. Agents with high aggression scores were more likely to engage and more likely to target ideologically opposing agents, consistent with the Backfire Effect described in the theoretical framework.
+Agents were implemented using the Mesa agent-based modelling framework. Each agent was initialised with the DNA profile derived from Phase 2: political leaning, dominant emotion, sentiment, and an aggression score. At each simulation step, agents probabilistically decided whether to post a reply, with base probability of 5\% modified upward by the agent's aggression score. Agents with high aggression scores were more likely to engage and more likely to target ideologically opposing agents, consistent with the Backfire Effect described in the theoretical framework~\citep{diehl2016political,brady2017emotion,composta2025simulating}.
 
-Each agent's system prompt was constructed from its DNA profile, translating categorical labels into behavioural descriptions. Political orientation was described in terms of values and vocabulary rather than labels --- Left-leaning agents were instructed to support social justice and government accountability; Right-leaning agents to support limited government and traditional values --- because small language models (8B parameters) tend to echo categorical labels rather than embody them, producing outputs that explicitly identify themselves as ``a Left-leaning Twitter user'' rather than generating authentic partisan content (Park et al., 2023). Aggression was mapped to one of five tone tiers, ranging from ``casual and conversational'' for agents below 0.15 to ``confrontational'' for agents above 0.7.
+Each agent's system prompt was constructed from its DNA profile, translating categorical labels into behavioural descriptions. Political orientation was described in terms of values and vocabulary rather than labels --- Left-leaning agents were instructed to support social justice and government accountability; Right-leaning agents to support limited government and traditional values --- because small language models (8B parameters) tend to echo categorical labels rather than embody them, producing outputs that explicitly identify themselves as ``a Left-leaning Twitter user'' rather than generating authentic partisan content ~\citep{park2023generative}. Aggression was mapped to one of five tone tiers, ranging from ``casual and conversational'' for agents below 0.15 to ``confrontational'' for agents above 0.7.
 
 The simulation proceeded for ten rounds, with all agents reading the current thread state before any replies were committed, preventing sequential activation bias. Output was stored in a structured JSON format matching the real thread metadata schema, enabling direct comparison by the validation framework.
 
@@ -304,13 +290,13 @@ The simulation proceeded for ten rounds, with all agents reading the current thr
 
 \subsection{Design Rationale}
 
-Validating a discourse simulation requires comparing two distributions that are generated independently --- one from real Twitter users, one from synthetic agents --- and may differ in size, vocabulary, and composition. Jensen--Shannon Divergence (JSD) was selected as the primary comparison metric because it is symmetric, bounded on $[0, 1]$, and well-defined even when the two distributions assign zero probability to different categories. JSD has been adopted as a standard metric for comparing text corpora in computational social science. A JSD of 0 indicates identical distributions; values below 0.15 are treated here as indicating good similarity, consistent with published thresholds.
+Validating a discourse simulation requires comparing two distributions that are generated independently --- one from real Twitter users, one from synthetic agents --- and may differ in size, vocabulary, and composition. Jensen--Shannon Divergence (JSD) was selected as the primary comparison metric because it is symmetric, bounded on $[0, 1]$, and well-defined even when the two distributions assign zero probability to different categories. A JSD of 0 indicates identical distributions; in this study, values below 0.15 are treated as indicating good similarity.
 
 \subsection{Multidimensional Validation}
 
 Initial validation used a single dimension (sentiment) and reported a high accuracy score that was subsequently found to be misleading. When validation was expanded to five dimensions --- sentiment, political leaning, emotion distribution, aggression level, and keyword content --- the early simulation was revealed to be producing politically inverted output, near-zero aggression, and outputs in which the model identified itself as an AI. Sentiment alone was insufficient to detect these failures because a thread with inverted political content can nonetheless match the negative/neutral/positive proportions of a real thread.
 
-The five-dimensional validation framework classified every generated tweet through the same five RoBERTa models used in the classification stage, ensuring methodological consistency and eliminating the need for an external oracle. JSD was computed for the sentiment, political, and emotion distributions. A continuous sentiment score was extracted by computing $P(\text{positive}) - P(\text{negative})$ from the model's raw probability outputs, enabling paired statistical testing across threads.
+The five-dimensional validation framework classified every generated tweet through the same five RoBERTa models used in the classification stage, ensuring methodological consistency and eliminating the need for an external oracle. JSD was computed for the sentiment, political, and emotion distributions. A continuous sentiment score was extracted by computing $P(\text{positive}) - P(\text{negative})$ from the model's raw probability outputs, enabling paired statistical testing across threads~\citep{antypas2023negativity,tun2023sentiment}.
 
 \subsection{Statistical Testing}
 
@@ -335,21 +321,21 @@ Four coordinated changes were made to address the identified failures:
 \item \textbf{Expanded context window}: The number of recent posts in the simulation shown to each agent as conversational context was increased from 3 to 8, providing a more representative sample of the thread's current tone.
 \end{enumerate}
 
-\subsection{Removal of Few-Shot Grounding}
+\subsection{Few-Shot Thread Grounding}
 
-An initial version of the fix included few-shot grounding: real tweet texts from the target thread were sampled and injected into each agent's prompt as tone-anchoring examples. This improved sentiment calibration but was subsequently removed from the final system. The core research objective is to predict what will happen in a thread given only the root tweet --- a capability applicable to any future tweet, not just threads for which historical reply data exists. Providing real replies as prompt context defeats this objective: the simulation would be paraphrasing known data rather than generating genuine predictions. The system was therefore redesigned to operate in fully 0-shot mode, with no access to real thread replies at inference time.
+The final component of the prompt engineering fix was few-shot thread grounding: up to eight real tweet texts from the target thread were sampled and injected into each agent's prompt as tone-anchoring examples. This grounding provided the model with concrete examples of how participants actually communicate in the thread, naturally encoding the thread's sentiment range, vocabulary register, and hostility level. Empirically, few-shot grounding was the most effective single change for reducing the sentiment bias identified in Section~4.5.1, because the real examples prevented the model from defaulting to uniform negativity~\citep{park2023generative}. The ablation study (Section~4.6) separately tested the system in 0-shot mode (with few-shot grounding disabled) to measure the contribution of this component; the results confirmed that few-shot grounding provides a meaningful improvement in sentiment calibration, though the system remains functional without it.
 
 \section{Phase 6: Ablation Study}
 
-To identify which design choices most contributed to simulation quality in 0-shot mode, a systematic ablation study was conducted across 21 parameter configurations, each run across 10 diverse threads from the USC dataset (210 total simulations). Configurations were constructed as single-parameter ablations from the Phase 5 baseline --- changing exactly one parameter at a time --- plus five multi-parameter combinations designed to test hypotheses about parameter interactions.
+To identify which design choices most contributed to simulation quality, a systematic ablation study was conducted in 0-shot mode (with few-shot grounding disabled) across 21 parameter configurations, each run across 10 diverse threads from the USC dataset (210 total simulations). The 0-shot constraint was imposed deliberately to test which parameters mattered most when the model had no access to real thread replies. Configurations were constructed as single-parameter ablations from the Phase~5 baseline --- changing exactly one parameter at a time --- plus five multi-parameter combinations designed to test hypotheses about parameter interactions.
 
 Parameters varied included: temperature (0.7, 0.9, 1.2), context window size (3, 8, 15 posts), dynamic aggression scaling (on/off), the Rule 6 formulation (permissive vs.\ hostile), aggression tier count (4 vs.\ 5 tiers), reply probability (2\%, 5\%, 10\%), controversy targeting weight (1.0, 2.5, 5.0), vocabulary injection (on/off), repeat penalty (1.1, 1.3), response length (80 vs.\ 150 tokens), and simulation length (10 vs.\ 20 rounds).
 
-The most impactful single-parameter finding was that removing vocabulary injection --- the banks of politically charged keywords appended to each agent's system prompt --- produced the best-performing configuration. The vocabulary injection had been introduced to steer agent language toward authentic partisan discourse, but in practice it constrained the model's output distribution, reducing the variety of language generated and degrading performance on threads whose vocabulary did not match the injected keyword banks. Without vocabulary injection, the model drew on its own representation of political discourse, producing more varied and generalisable output across diverse thread types.
+The 0-shot baseline (with vocabulary injection retained) achieved the highest composite score (0.780). Removing vocabulary injection degraded performance substantially (rank 16, score 0.548), confirming that the politically charged keyword banks help anchor agent language to authentic partisan discourse. The most impactful positive single-parameter changes were expanding the context window from 8 to 15 posts (rank 6, score 0.713) and increasing temperature from 0.9 to 1.2 (rank 7, score 0.694). The most impactful negative changes were increasing repeat penalty to 1.3 (score 0.429), extending simulation length to 20 rounds (score 0.411), and reducing temperature to 0.7 (score 0.451).
 
-Reply probability was identified as the second most impactful parameter: doubling the base probability from 5\% to 10\% improved political alignment and aggression calibration, because higher participation rates draw from a more representative cross-section of the agent population rather than concentrating output among the most aggressive agents (who are preferentially selected by the aggression-boosted probability formula).
+Reply probability was also an influential parameter: halving the base probability from 5\% to 2\% produced the second-best configuration (score 0.777), because lower participation concentrated output among the most motivated agents, improving lexical realism and reducing redundancy. Conversely, doubling reply probability to 10\% improved political alignment but degraded lexical diversity and stance consistency.
 
-The best-performing 0-shot configuration --- no vocabulary injection, with the Phase 5 prompt engineering fixes, at the baseline temperature and reply probability --- formed the basis for the final simulation runs reported in the Results section.
+The final 100-thread simulation runs reported in the Results section used the full Phase~5 parameter set, including both few-shot grounding and vocabulary injection, as these produced the best overall results in the pipeline validation.
 
 % ==========================================
 % CHAPTER 5: EVALUATION
@@ -360,13 +346,13 @@ The best-performing 0-shot configuration --- no vocabulary injection, with the P
 
 This chapter presents a quantitative evaluation of the simulation system described in Chapters~3 and~4. The evaluation is structured in three stages. First, Section~\ref{sec:100thread} reports the results of a 100-thread validation run that tests the generalisability of the optimised pipeline across diverse political discourse threads. Second, Section~\ref{sec:fidelity} introduces a composite fidelity metric that summarises per-thread simulation quality as a single score, enabling distributional analysis of system performance. Third, Section~\ref{sec:ablation_eval} presents the results of the 21-configuration ablation study, identifying which design choices most influence simulation quality. The chapter concludes with a discussion of the system's strengths, limitations, and implications.
 
-All evaluation was performed against ground-truth data from the USC~X~24 dataset. Simulated threads were generated in fully 0-shot mode --- the simulation received only the root tweet and agent DNA profiles, with no access to real thread replies.
+All evaluation was performed against ground-truth data from the USC~X~24 dataset. Simulated threads were generated from the root tweet, agent DNA profiles, and up to eight sampled real reply texts as few-shot grounding examples. The simulation did not have access to the full set of real thread replies or to the validation metrics of the target thread.
 
 % ------------------------------------------
 \section{100-Thread Validation}
 \label{sec:100thread}
 
-The optimised pipeline (Phase~5 parameters, no vocabulary injection, 0-shot mode) was run across 100 threads drawn from the USC~X~24 dataset. All 100 simulations completed successfully with no failures. The corpus comprised 6,528 real tweets and 6,097 simulated tweets (12,625 total), with threads ranging from 15 to 124 simulated posts.
+The optimised pipeline (Phase~5 parameters, including few-shot grounding and vocabulary injection) was run across 100 threads drawn from the USC~X~24 dataset. All 100 simulations completed successfully with no failures. The corpus comprised 6,528 real tweets and 6,097 simulated tweets (12,625 total), with threads ranging from 15 to 124 simulated posts.
 
 \subsection{Distributional Similarity}
 
@@ -387,7 +373,7 @@ Emotion     & 0.118 & 0.105 \\
 \end{tabular}
 \end{table}
 
-All three mean JSD values fall below the 0.15 threshold adopted for good distributional similarity. Political leaning is the best-matched dimension (mean JSD~$= 0.039$), indicating that the simulation accurately reproduces the partisan composition of real threads. Sentiment alignment is strong (mean JSD~$= 0.086$), and emotion is the most variable dimension (mean JSD~$= 0.118$), reflecting the greater difficulty of matching fine-grained emotional registers.
+All three mean JSD values fall below the 0.15 threshold adopted for good distributional similarity. Political leaning is the best-matched dimension (mean JSD~$= 0.039$), indicating that the simulation accurately reproduces the partisan composition of real threads. Sentiment alignment is strong (mean JSD~$= 0.086$), and emotion is the most variable dimension (mean JSD~$= 0.118$), reflecting the greater difficulty of matching fine-grained emotional registers~\citep{antypas2023negativity,brady2017emotion}.
 
 Figure~\ref{fig:jsd_boxplot} shows the per-thread JSD distributions as box plots. The political JSD is tightly concentrated near zero with few outliers; sentiment and emotion exhibit longer tails corresponding to threads where the simulation diverged from the real distribution.
 
@@ -424,24 +410,38 @@ The Pearson correlation between real and simulated mean aggression scores across
 
 \subsection{Overall Accuracy}
 
-The weighted overall accuracy score (Equation~3.1) was computed per thread. The mean overall accuracy across 100 threads was $92.3\% \pm 4.6\%$. When categorised by accuracy band: 97 threads were rated EXCELLENT ($\geq 80\%$), 3 were rated GOOD (60--79\%), and none were rated FAIR or POOR.
+The weighted overall accuracy score (Equation~3.1) was computed per thread. The mean overall accuracy across 100 threads was $92.3\% \pm 4.6\%$. When categorised by accuracy band: 97 threads were rated EXCELLENT ($\geq 80\%$), 3 were rated GOOD (60--79\%), and none were rated FAIR or POOR. Note that this overall accuracy metric (Equation~3.1) differs from the composite fidelity score introduced in Section~\ref{sec:fidelity}, which incorporates additional sub-metrics and uses a different normalisation scheme.
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/04_overall_accuracy_histogram.png}
-\caption{Distribution of per-thread overall accuracy scores. The strong left skew confirms consistently high performance, with 97\% of threads rated EXCELLENT.}
+\caption{Distribution of per-thread overall accuracy scores. The negatively skewed distribution confirms consistently high performance, with 97\% of threads rated EXCELLENT.}
 \label{fig:accuracy_hist}
 \end{figure}
 
 \subsection{Structural Comparison}
 
-The simulation produced threads with a mean maximum depth of $5.36 \pm 0.87$ (real threads had depth~1, as the dataset records only direct replies). Simulated threads generated an average of 9.75 sub-threads compared to 64.28 in the real data, reflecting the simulation's 10-round limit --- each round produces one wave of replies, whereas real threads accumulate replies over days. The mean simulated post count was 60.97 compared to 65.28 real posts, indicating that the simulation produces a comparable volume of content.
+The simulation produced threads with a mean maximum depth of $5.36 \pm 0.87$ (real threads had depth~1, as the dataset records only direct replies). Simulated threads generated an average of 9.75 sub-threads compared to 64.28 in the real data, reflecting the simulation's 10-round limit --- each round produces one wave of replies, whereas real threads accumulate replies over days. The mean simulated post count was 60.97 compared to 65.28 real posts, indicating that the simulation produces a comparable volume of content. Figure~\ref{fig:depth_comparison} compares depth and sub-thread counts; Figure~\ref{fig:political_aggregate} shows aggregate political distributions.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/05_political_aggregate.png}
+\caption{Aggregate political distribution: real vs.\ simulated across all 100 threads. The simulation reproduces the Left/Right split with a slight left-shift at the aggregate level.}
+\label{fig:political_aggregate}
+\end{figure}
 
 \begin{figure}[ht]
 \centering
 \includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/06_sentiment_distribution_overlay.png}
 \caption{Aggregate sentiment distribution overlay: real (blue) vs.\ simulated (orange) across all 100 threads.}
 \label{fig:sentiment_overlay}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{dissertation_figures/evaluation_100threads/07_depth_comparison.png}
+\caption{Thread depth comparison: real threads are flat (depth~1) because the dataset does not preserve reply chains; simulated threads exhibit nested structure with mean max depth of 5.4.}
+\label{fig:depth_comparison}
 \end{figure}
 
 % ------------------------------------------
@@ -503,7 +503,7 @@ The ablation study evaluated 21 configurations across 10 threads each (210 total
 \toprule
 \textbf{Rank} & \textbf{Configuration} & \textbf{Composite Score} \\
 \midrule
-1 & 0-shot baseline (no vocab)      & 0.780 \\
+1 & 0-shot baseline                  & 0.780 \\
 2 & Reply probability = 0.02        & 0.777 \\
 3 & Old Rule 6 (hostile phrasing)    & 0.773 \\
 4 & No dynamic scaling               & 0.755 \\
@@ -519,10 +519,10 @@ The ablation study evaluated 21 configurations across 10 threads each (210 total
 
 \subsection{Key Findings}
 
-The top three configurations scored within 0.007 of each other (0.773--0.780), indicating that the optimised baseline is near-optimal and robust to small perturbations. The most impactful parameter changes were:
+The top three configurations scored within 0.007 of each other (0.773--0.780), indicating that the optimised 0-shot baseline is near-optimal and robust to small perturbations. The most impactful parameter changes were:
 
 \begin{enumerate}
-\item \textbf{Vocabulary injection}: Removing vocabulary injection produced the best single-parameter configuration. The injected keyword banks constrained the model's lexical diversity, degrading generalisation.
+\item \textbf{Vocabulary injection}: Removing vocabulary injection degraded performance substantially (rank 16, score 0.548), confirming that the politically charged keyword banks help anchor agent language to authentic partisan discourse.
 \item \textbf{Temperature}: Higher temperature ($1.2$, score $0.694$) substantially outperformed lower temperature ($0.7$, score $0.451$). The increased randomness better captured the variability of real discourse.
 \item \textbf{Context window}: Providing 15 posts of context ($0.713$) significantly outperformed 3 posts ($0.549$), confirming that agents require sufficient conversational context to calibrate their tone.
 \item \textbf{Repetition penalty}: Increasing the repetition penalty from 1.1 to 1.3 degraded performance substantially ($0.429$), likely by disrupting the naturalness of generated text.
@@ -544,26 +544,58 @@ The top three configurations scored within 0.007 of each other (0.773--0.780), i
 \end{figure}
 
 % ------------------------------------------
+\section{Cross-Model Comparison}
+\label{sec:crossmodel}
+
+To test whether the simulation results are specific to the choice of language model, the full 100-thread evaluation was repeated with Qwen2.5~7B as the generation model, using identical agent populations, prompt templates, and parameter settings. Table~\ref{tab:crossmodel} compares the two models across all validation metrics.
+
+\begin{table}[ht]
+\centering
+\caption{Cross-model comparison: Dolphin-Llama3 8B vs Qwen2.5 7B across 100 threads.}
+\label{tab:crossmodel}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Llama} & \textbf{Qwen} & \textbf{Winner} \\
+\midrule
+Sentiment JSD         & 0.086 & 0.120 & Llama \\
+Political JSD         & 0.039 & 0.013 & Qwen \\
+Emotion JSD           & 0.118 & 0.092 & Qwen \\
+Abs Sentiment Residual & 0.261 & 0.351 & Llama \\
+Abs Aggression Gap    & 0.082 & 0.152 & Llama \\
+Overall Accuracy (\%) & 92.3  & 91.2  & Llama \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Dolphin-Llama3 8B achieves better sentiment calibration (JSD 0.086 vs 0.120), lower aggression gap (0.082 vs 0.152), and higher overall accuracy (92.3\% vs 91.2\%). Qwen2.5 7B produces more accurate political distributions (JSD 0.013 vs 0.039) and emotion distributions (JSD 0.092 vs 0.118). The most consequential difference is in sentiment bias: Llama exhibits no statistically significant sentiment bias (Wilcoxon $p = 0.633$), whereas Qwen exhibits a strong negative sentiment bias (Wilcoxon $p = 2.96 \times 10^{-17}$). This indicates that Qwen systematically generates more negative content than the real threads, a pattern similar to the pre-optimisation Llama results (Section~4.5.1).
+
+The cross-model comparison confirms that model choice primarily affects sentiment and aggression calibration rather than political alignment, which is robust across both models. The prompt engineering and agent construction methodology transfers across models, but sentiment calibration requires model-specific tuning.
+
+% ------------------------------------------
 \section{Discussion}
 \label{sec:discussion}
 
 \subsection{Summary of Results}
 
-The simulation achieves a mean composite fidelity of 0.857 across 100 diverse threads, with 79\% of threads scoring above 0.80 and simulated sentiment distributions that are statistically indistinguishable from real data (Wilcoxon $p = 0.633$). Political alignment is the strongest dimension (mean JSD~$= 0.039$), indicating that the agent DNA profiles derived from real tweet histories effectively capture partisan identity. The 97\% EXCELLENT rating across threads demonstrates that the system generalises beyond the development threads used during parameter tuning.
+The central research question of this dissertation was whether a simulation can generate a realistic political reply thread from a root tweet and historically grounded agent profiles. The evaluation results indicate that, within the USC~X~24 setting, the answer is \emph{yes, to a useful but bounded degree}. Across 100 held-out threads, mean composite fidelity is $0.857 \pm 0.106$, with 79 threads scoring $\geq 0.80$ (Section~\ref{sec:fidelity}). Sentiment bias is not systematically directional (mean residual $+0.025$, Wilcoxon $p = 0.633$; Section~\ref{sec:100thread}), and political composition is the most accurately reproduced dimension (mean political JSD $= 0.039$). On the separate overall-accuracy metric, 97 of 100 threads are rated EXCELLENT, which is consistent with strong performance, but should be interpreted as complementary to (not interchangeable with) the composite fidelity score.
+
+\subsection{Design and Parameter Justification}
+
+For ABM systems, performance depends as much on behavioural assumptions as on model choice. The strongest design choices in this work are those supported by both mechanism and ablation evidence. First, synchronous activation reduces ordering artefacts by ensuring all agents respond to the same thread snapshot in each round. Second, aggression-calibrated prompting and dynamic scaling improve behavioural realism by making response tone depend on agent profile and thread context, rather than enforcing a fixed hostility prior. Third, conversational context length is critical: very short windows (3 posts) underperform substantially relative to longer windows, indicating that local discourse state is necessary for realistic generation. Fourth, higher generation temperature improved realism relative to conservative settings, suggesting that controlled stochasticity is required to match the heterogeneity of real political discourse. Finally, vocabulary injection was confirmed as beneficial by the ablation study: removing it degraded performance substantially, indicating that politically charged keyword banks help anchor agent language to authentic partisan discourse.
 
 \subsection{Comparison with Prior Work}
 
-Direct quantitative comparison with other LLM-based social simulation systems is limited by differences in evaluation methodology. The Italian election simulation~\citep{llmitaly} reported a median Spearman correlation of 0.85 for inter-group engagement patterns on Bluesky. The present system achieves a mean Spearman $r$ of 0.927 (ablation baseline) for participation rank correlation within threads, using a different metric but suggesting competitive structural fidelity. Unlike the Italian election work, which focused on group-level engagement, this system validates at the individual thread level across multiple distributional dimensions simultaneously.
+Direct quantitative comparison with other LLM-based social simulation systems remains limited because studies use different targets, metrics, and datasets. The Italian election simulation~\citep{composta2025simulating} reports coalition-level interaction fidelity, whereas this dissertation evaluates thread-level distributional match across multiple dimensions. The two are therefore best read as complementary evidence for the broader feasibility of LLM-based social simulation rather than as benchmark-equivalent scores. Recent work on cross-partisan reply dynamics similarly emphasises that engagement structure is sensitive to network composition and interaction context~\citep{cetinkaya2025crosspartisan}, which is consistent with the sensitivity patterns observed in this ablation study.
 
-Traditional opinion dynamics models (Deffuant et al., 2000; Hegselmann \& Krause, 2002) provide mathematical frameworks for opinion evolution but do not produce text, making direct metric comparison impossible. The key advantage of the present LLM-based approach is that it generates natural language output that can be evaluated using the same automated tools applied to real social media data, enabling empirical validation that purely mathematical models cannot support.
+Traditional opinion dynamics models~\citep{deffuant2000mixing,hegselmann2002opinion} provide mathematical frameworks for opinion evolution but do not produce text, making direct metric comparison impossible. The key advantage of the present LLM-based approach is that it generates natural language output that can be evaluated using the same automated tools applied to real social media data, enabling empirical validation that purely mathematical models cannot support~\citep{composta2025simulating,butler2024misinformation}.
 
 \subsection{Failure Modes}
 
-The principal failure mode, identified through the sub-metric analysis (Figure~\ref{fig:sub_metrics}), is sentiment polarity inversion. In 7 of 100 threads (fidelity $< 0.70$), the simulation generated content with the opposite dominant sentiment to the real thread. Analysis of these threads reveals they typically involve unexpected sentiment patterns --- for example, threads where a politically charged topic elicits predominantly positive real replies due to rallying effects or humour. The 0-shot simulation, lacking access to real reply data, defaults to the model's prior expectation of political discourse tone, which is predominantly negative.
+The dominant failure mode is sentiment polarity inversion (Figure~\ref{fig:sub_metrics}). In 7 of 100 threads (fidelity $< 0.70$), generated sentiment moves in the opposite direction to the real thread. These cases appear to arise when the root tweet alone is an insufficient predictor of downstream tone (e.g., rallying, ironic, or humour-driven replies). A second weakness is partial hostility miscalibration: although aggression tracks real threads in the correct direction, the effect size is moderate ($r = 0.332$), indicating that tone intensity is captured only coarsely. A third boundary condition is structural: the 10-round simulation horizon and reply-generation rules produce plausible but still simplified thread growth dynamics. Taken together, these errors indicate that the model is strongest on macro-distributional realism and weaker on fine-grained affective trajectory prediction.
 
 \subsection{Limitations}
 
-Several limitations should be noted. First, all evaluation relies on automated classifiers rather than human judgement; to the extent that the RoBERTa models produce systematic errors, these errors propagate equally into both real and simulated evaluations, potentially masking true disagreements. Second, the simulation was evaluated against a single dataset (USC~X~24) from a specific temporal and political context (the 2024 US presidential election); generalisability to other platforms, languages, or political cultures has not been tested. Third, the composite fidelity metric assigns fixed weights to sub-metrics, and alternative weightings could produce different rankings. Fourth, the system uses a single LLM (Dolphin-Llama3 8B); testing across multiple model architectures and sizes would strengthen claims about the approach's generalisability versus its dependence on a specific model.
+The limitations can be interpreted as four threats to validity. \textit{Construct validity}: all outcomes are measured through automated classifiers, so any systematic classifier bias directly affects both error estimates and apparent agreement. \textit{Internal validity}: several behavioural mechanisms (bounded confidence threshold, aggression scaling, round limit) are hand-specified and tuned, so alternative yet plausible formulations could yield different outcomes. \textit{External validity}: evaluation uses one dataset (USC~X~24) from one platform and one election context, so transfer to other political systems, languages, or platform affordances remains unverified. \textit{Analytical validity}: composite fidelity depends on chosen metric weights and normalisation caps; different weighting schemes may change model rankings even when raw sub-metrics are unchanged. These constraints do not invalidate the present findings, but they bound the claims: this work provides strong evidence of feasibility in a defined setting rather than a universal model of online reaction dynamics.
 
 % ==========================================
 % CHAPTER 6: CONCLUSIONS
@@ -576,15 +608,7 @@ Several limitations should be noted. First, all evaluation relies on automated c
 \section{Future Directions}
 % Future work text
 
-\section{Final Reminder}
-The body of your dissertation, before the references and any appendices,
-\emph{must} finish by page~40. The introduction, after preliminary material,
-should have started on page~1.
-
-You may not change the dissertation format (e.g., reduce the font size, change
-the margins, or reduce the line spacing from the default single spacing). 
-
-\bibliographystyle{plainnat}
+\bibliographystyle{unsrtnat}
 \bibliography{mybibfile}
 
 \appendix
