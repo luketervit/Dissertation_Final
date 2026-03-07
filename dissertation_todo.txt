@@ -1,0 +1,173 @@
+DISSERTATION TO-DO LIST
+=======================
+Last updated: 18 Feb 2026
+
+
+========================================
+1. QUICK FIXES (do first)
+========================================
+
+[ ] Fix Chapter 2 section titles — they're from a wrong template:
+      - "The Problem of Academic Expertise Discovery" → something like "Political Content and Online Influence"
+      - "Advances in Semantic Retrieval" → "Political Persuasion on Social Media"
+      - "Conversational Search and LLM-Assisted Query Understanding" → "Factors Influencing Online Political Persuasion"
+      - "Towards Adaptive Conversational Semantic Search" → remove or rename
+
+
+========================================
+2. CHAPTER 2: BACKGROUND (rewrite)
+========================================
+
+[ ] Rewrite full background chapter with correct section structure
+    Suggested sections:
+      - Political Content and Online Discourse
+      - Agent-Based Modelling for Social Simulation
+      - Opinion Dynamics Models (Deffuant, Hegselmann-Krause, bounded confidence)
+      - The Backfire Effect and Partisan Entrenchment
+      - LLM Agents for Social Simulation (Italian election paper, etc.)
+      - AI as Persuasion Judge
+      - Measuring Persuasion on Social Media (engagement metrics vs. attitude change)
+      - Limitations of Current Approaches
+      - Summary / Gap in Literature
+
+
+========================================
+3. SIMULATIONS & EXPERIMENTS
+========================================
+
+[ ] Run final 100-thread batch simulation with best 0-shot parameters
+[ ] Test alternative uncensored models (e.g., Mistral-instruct, WizardLM)
+      - Even 2-3 models on 10 threads each is enough
+      - Plot comparison graph of model performance
+[ ] Comparison with state-of-the-art approaches
+      - Compare against Italian election LLM-ABM paper's approach
+      - Compare against traditional opinion dynamics models (Deffuant, HK) on same threads
+      - Quantitative comparison table
+
+
+========================================
+4. CHAPTER 5: EVALUATION (write)
+========================================
+
+--- 5A. SIMULATION ACCURACY vs REAL THREADS ---
+[ ] Run final 100-thread batch with best parameters
+[ ] Compare simulated vs real thread data across all dimensions:
+      - Thread depth / reply chain structure
+      - Sentiment distribution (JSD + continuous score)
+      - Political leaning distribution (JSD)
+      - Emotion distribution (JSD)
+      - Aggression levels
+      - Reply volume / engagement patterns
+[ ] Sentiment bias analysis (Wilcoxon signed-rank test)
+[ ] Overall weighted accuracy breakdown (EXCELLENT/GOOD/FAIR/POOR)
+[ ] Analyse which thread types the simulation handles best/worst
+[ ] Present ablation study results
+      - Parameter impact rankings
+      - Key findings (vocabulary injection, reply probability)
+
+--- 5B. INTERNAL MODEL COMPARISON (your system, different LLMs) ---
+[ ] Test the same simulation pipeline with multiple uncensored models:
+      - Dolphin-Llama3 8B (current baseline)
+      - Mistral-instruct / uncensored variant
+      - WizardLM uncensored
+      - Any other uncensored models available via Ollama
+[ ] Run each model on the same set of threads (e.g., 10-20 threads)
+[ ] Compare models on:
+      - Political JSD
+      - Sentiment JSD
+      - Emotion JSD
+      - Aggression calibration
+      - Overall weighted accuracy
+      - Generation quality (coherence, realism)
+[ ] Rank models and identify best performer
+[ ] Plot comparison chart / table
+
+--- 5C. EXTERNAL COMPARISON (your system vs other approaches) ---
+[ ] Identify comparable state-of-the-art systems:
+      - Italian election LLM-ABM (Bluesky simulation)
+      - Traditional opinion dynamics models (Deffuant, HK)
+      - Engagement prediction models
+      - Any other Twitter simulation papers
+[ ] Compare on methodology:
+      - What they simulate vs what you simulate
+      - Input requirements (how much real data needed)
+      - Validation approach
+      - Metrics used
+[ ] Quantitative comparison where possible (correlation scores, accuracy)
+[ ] Qualitative comparison where direct numbers aren't available
+[ ] Comparison summary table
+
+--- 5D. DISCUSSION ---
+[ ] Strengths and weaknesses of the system
+[ ] Limitations and threats to validity
+[ ] What the model comparison reveals about LLM choice
+[ ] How the system compares to existing work
+
+
+========================================
+5. CHAPTER 6: CONCLUSIONS (write)
+========================================
+
+[ ] Summary of contributions
+[ ] Key findings
+[ ] Limitations
+[ ] Future work
+      - Testing more models
+      - Larger datasets
+      - Real-time simulation
+      - User study validation
+
+
+========================================
+6. CITATIONS & BIBLIOGRAPHY
+========================================
+
+[ ] Create/update mybibfile.bib with all references
+[ ] Fill in all [CITATION NEEDED] markers:
+      - Twitter discourse characteristics (hostility, anger as dominant modes)
+      - Agent DNA dimensions justification (why these 5 are the right ones)
+      - Twitter engagement and hostility correlation
+      - JSD threshold of 0.15 in computational social science
+      - Dolphin-Llama3 / uncensored fine-tune justification
+      - Twitter linguistic specificity (domain-specific models > general ones)
+      - Prior Twitter ABM papers (2-3 refs for assumed distributions)
+[ ] Add proper \citep{} for all inline references:
+      - Axelrod, 1997
+      - Epstein & Axtell, 1996
+      - Deffuant et al., 2000
+      - Hegselmann & Krause, 2002
+      - Nyhan & Reifler, 2010
+      - Park et al., 2023
+      - Barbieri et al., 2020
+      - Devlin et al., 2019
+      - Eric Hartford / Dolphin model
+[ ] Acknowledge backfire effect replicability concerns (recent meta-analyses)
+
+
+========================================
+7. DIAGRAMS & FIGURES
+========================================
+
+[ ] System pipeline diagram (data → classification → agent DNA → simulation → validation)
+[ ] Agent interaction / thread simulation diagram
+[ ] Agent DNA profile example diagram
+[ ] Results figures:
+      - JSD distribution histograms
+      - Sentiment residual plot (before/after parameter optimisation)
+      - Ablation study parameter impact chart
+      - Model comparison chart (if testing multiple models)
+      - Example simulated vs real thread comparison
+
+
+========================================
+8. FINAL POLISH
+========================================
+
+[ ] Proofread all chapters
+[ ] Check page count is within 40-page limit
+[ ] Ensure consistent terminology throughout
+[ ] Check all figures/tables are referenced in text
+[ ] Verify bibliography compiles correctly
+[ ] Remove any remaining placeholder text
+[ ] Check acknowledgements section
+[ ] Final compile and PDF review

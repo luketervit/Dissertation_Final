@@ -1,0 +1,77 @@
+\documentclass[10pt]{article}
+\usepackage[margin=0.7in]{geometry}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{titlesec}
+
+\definecolor{accent}{HTML}{1F3C5A}
+\titleformat{\section}{\normalsize\bfseries\color{accent}}{}{0em}{}
+\titlespacing*{\section}{0pt}{0.45em}{0.25em}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.2em}
+\setlist[itemize]{leftmargin=1.1em,itemsep=0.05em,topsep=0.1em}
+
+\begin{document}
+\small
+
+\begin{center}
+{\Large\bfseries Root-Tweet Forward Prediction of Political Reply Dynamics}\\[0.25em]
+{\normalsize Technical Whitepaper}\\[0.2em]
+Luke Tervit \quad|\quad University of Edinburgh \quad|\quad March 2026
+\end{center}
+
+\section{Objective}
+This project asks whether downstream political discourse can be predicted from the \textbf{root tweet alone}. The modelling goal is not exact next-token recreation of future replies, but distribution-level forecasting of how a conversation unfolds across political alignment, emotion, sentiment, and aggression.
+
+\section{System Summary}
+The pipeline combines an agent-based model (Mesa) with LLM generation (Dolphin-Llama3 8B via Ollama):
+\begin{itemize}
+  \item Agent personas are constructed from historical Twitter data using five classifiers: political leaning, emotion, sentiment, hate, and offensive language.
+  \item Each simulation starts with only the root tweet in thread metadata (0-shot prediction mode; no real target replies exposed).
+  \item Agents interact over 10 synchronous rounds; reply probability is behaviourally weighted (base + aggression boost), and each generated post conditions on recent thread context.
+  \item Validation reclassifies real and simulated tweets with the same five-model stack and computes JSD-based similarity plus aggression-mean gap.
+\end{itemize}
+
+\section{Specific-User Forward Holdout Experiment}
+\textbf{Target account:} Sen. Marsha Blackburn (user\_id 278145569).\\
+\textbf{Protocol:} 8 chronological root tweets found; first 3 used to build responder personas; \textbf{last 5 held out} for forward prediction.\\
+\textbf{Prediction input per run:} root tweet text only (\texttt{source: forward\_holdout\_zero\_shot}; \texttt{use\_few\_shot: false}).\\
+\textbf{Population:} 200 sampled agents from 124 matched historical responders.
+
+\begin{center}
+\begin{tabular}{l c}
+\toprule
+Holdout Root Tweet ID & Overall Accuracy (\%) \\
+\midrule
+1800961685949198714 & 97.93 \\
+1800996791078236518 & 94.83 \\
+1801248635654390240 & 94.58 \\
+1801290362700394984 & 90.57 \\
+1801402597707767909 & 94.79 \\
+\midrule
+\textbf{Mean $\pm$ SD} & \textbf{94.54 $\pm$ 2.34} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Component means across the 5 predicted tweets:}
+Political similarity 96.45\%, Emotion similarity 91.78\%, Sentiment similarity 97.39\%, Aggression similarity 90.17\%.
+
+\section{Interpretation and Significance}
+The core claim is supported: using only the root tweet and historically learned responder behaviour, the system forecasted the next five held-out conversations with \textbf{94.54\% mean weighted accuracy}. This extends broader project evidence (92.3\% mean on 100 held-out threads) by showing user-specific forward prediction works in strict chronological holdout mode.
+
+\section{Boundaries and Next Steps}
+\begin{itemize}
+  \item The 94.54\% metric is distributional fidelity, not exact tweet-by-tweet text matching.
+  \item Reply volume was not directly optimised in this score; future work should add calibrated volume/velocity objectives.
+  \item External validity remains bounded to USC X 24 political discourse and tested model settings.
+\end{itemize}
+
+\vspace{0.25em}
+\textbf{Bottom line:} past political tweets from a specific account can be transformed into a predictive behavioural population that anticipates likely reaction patterns to the account's next root tweets before those conversations are observed.
+
+\end{document}

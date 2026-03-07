@@ -31,10 +31,15 @@ batch_analysis_old/
 ablation_output/
 parameter_sweep/
 dissertation_old_claude_pipeline_analysis/
+parameter_sweep_analysis/
+
 
 # Output files
+outputs/*
 output/*
+analysis/*
 !output/.gitkeep
+logs/*
 
 # Processed agent data
 processed_agents/
