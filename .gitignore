@@ -18,6 +18,7 @@ dist/
 *.csv
 *.parquet
 !data/.gitkeep
+data/case_study/
 batch_output/
 batch_output_100/
 batch_analysis/
@@ -40,6 +41,13 @@ output/*
 analysis/*
 !output/.gitkeep
 logs/*
+
+# Generated case-study artifacts
+case_study/
+
+# Curated dissertation figures
+dissertation_figures/final/personality_extraction.png
+dissertation_figures/final/sim_pipeline.png
 
 # Processed agent data
 processed_agents/

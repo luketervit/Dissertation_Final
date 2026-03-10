@@ -5,6 +5,7 @@ Designed for GCP/nohup runs on the same prepared 100-thread set used by
 the baseline run.
 
 Examples:
+  python scripts/run_model_comparison_batch.py --model llama
   python scripts/run_model_comparison_batch.py --model qwen
   python scripts/run_model_comparison_batch.py --model deepseek_r1
   python scripts/run_model_comparison_batch.py --model deepseek_llm
@@ -25,6 +26,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 MODEL_PRESETS = {
+    "llama": {
+        "provider": "ollama",
+        "model": "dolphin-llama3:8b",
+        "api_key_env": None,
+        "temperature": 0.9,
+        "max_tokens": 150,
+    },
     # Local Ollama models suitable for T4.
     "qwen": {
         "provider": "ollama",
@@ -52,6 +60,7 @@ MODEL_PRESETS = {
 }
 
 MODEL_OUTPUT_DIR = {
+    "llama": "batch_output_llama",
     "qwen": "batch_output_qwen",
     "deepseek_r1": "batch_output_deepseek_r1",
     "deepseek_llm": "batch_output_deepseek_llm",
@@ -363,7 +372,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        choices=["qwen", "deepseek_r1", "deepseek_llm", "all"],
+        choices=["llama", "qwen", "deepseek_r1", "deepseek_llm", "all"],
         required=True,
         help="Model preset to run.",
     )
@@ -427,7 +436,7 @@ def main() -> None:
         raise FileNotFoundError(f"Input directory not found: {input_dir}")
 
     model_sequence = (
-        ["qwen", "deepseek_r1", "deepseek_llm"]
+        ["llama", "qwen", "deepseek_r1", "deepseek_llm"]
         if args.model == "all"
         else [args.model]
     )
