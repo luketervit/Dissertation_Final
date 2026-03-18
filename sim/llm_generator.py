@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 # Load .env from project root
 load_dotenv(Path(__file__).parent.parent / '.env')
+load_dotenv(Path(__file__).parent.parent / '.env.openrouter', override=True)
 
 # Political vocabulary banks for realistic tweet generation.
 # Left-wing agents use progressive attack language; Right-wing agents
@@ -90,15 +91,20 @@ class LLMGenerator:
         self.max_tokens = config.get('max_tokens', 150)
 
         # Initialize client based on provider
-        if self.provider in {"openai", "deepseek"}:
+        if self.provider in {"openai", "deepseek", "openrouter"}:
             api_key_env = config.get('api_key_env')
             if api_key_env:
                 api_key = os.getenv(api_key_env)
             else:
                 # Sensible defaults when api_key_env isn't provided.
                 api_key = os.getenv(
-                    "OPENAI_API_KEY" if self.provider == "openai"
-                    else "DEEPSEEK_API_KEY"
+                    "OPENAI_API_KEY"
+                    if self.provider == "openai"
+                    else (
+                        "DEEPSEEK_API_KEY"
+                        if self.provider == "deepseek"
+                        else "OPENROUTER_API_KEY"
+                    )
                 )
             if not api_key:
                 env_name = (
@@ -107,7 +113,11 @@ class LLMGenerator:
                     else (
                         "OPENAI_API_KEY"
                         if self.provider == "openai"
-                        else "DEEPSEEK_API_KEY"
+                        else (
+                            "DEEPSEEK_API_KEY"
+                            if self.provider == "deepseek"
+                            else "OPENROUTER_API_KEY"
+                        )
                     )
                 )
                 raise ValueError(
@@ -121,6 +131,29 @@ class LLMGenerator:
                 if base_url_env and os.getenv(base_url_env):
                     base_url = os.getenv(base_url_env)
                 self.client = OpenAI(api_key=api_key, base_url=base_url)
+            elif self.provider == "openrouter":
+                base_url = config.get(
+                    "base_url",
+                    os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+                )
+                site_url = config.get(
+                    "site_url",
+                    os.getenv("OPENROUTER_SITE_URL", "https://local.simulation.run"),
+                )
+                app_name = config.get(
+                    "app_name",
+                    os.getenv("OPENROUTER_APP_NAME", "Dissertation_Final"),
+                )
+                extra_headers = {}
+                if site_url:
+                    extra_headers["HTTP-Referer"] = site_url
+                if app_name:
+                    extra_headers["X-Title"] = app_name
+                self.client = OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    default_headers=extra_headers or None,
+                )
             else:
                 self.client = OpenAI(api_key=api_key)
 
@@ -209,7 +242,7 @@ class LLMGenerator:
         )
 
         # Generate based on provider
-        if self.provider in {"openai", "deepseek"}:
+        if self.provider in {"openai", "deepseek", "openrouter"}:
             raw = self._generate_openai(system_prompt, user_prompt)
         elif self.provider == "anthropic":
             raw = self._generate_anthropic(system_prompt, user_prompt)

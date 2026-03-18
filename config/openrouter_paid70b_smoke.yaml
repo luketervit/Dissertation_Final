@@ -1,0 +1,36 @@
+llm:
+  model: meta-llama/llama-3.3-70b-instruct
+  temperature: 0.7
+  max_tokens: 90
+
+simulation:
+  max_rounds: 2
+  max_posts_per_round: 2
+  parallel_workers: 4
+
+root_post:
+  author_id: root_paid_70b
+  author_name: policy_monitor
+  text: "Trump says broad tariffs will rebuild U.S. manufacturing fast, but economists keep warning about higher consumer prices. Which side is actually right?"
+
+agents:
+  - user_id: paid_left_01
+    display_name: left_policy_wonk
+    political_label: Left
+    aggression: 0.58
+    emotion: anger
+  - user_id: paid_right_01
+    display_name: right_tradehawk
+    political_label: Right
+    aggression: 0.52
+    emotion: surprise
+  - user_id: paid_center_01
+    display_name: centrist_numbers
+    political_label: Center
+    aggression: 0.18
+    emotion: sadness
+  - user_id: paid_left_02
+    display_name: labor_left
+    political_label: Left
+    aggression: 0.46
+    emotion: fear

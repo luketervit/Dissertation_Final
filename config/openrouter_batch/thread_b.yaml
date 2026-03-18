@@ -1,0 +1,25 @@
+llm:
+  temperature: 0.8
+  max_tokens: 140
+
+simulation:
+  max_rounds: 1
+  max_posts_per_round: 1
+  parallel_workers: 2
+
+root_post:
+  author_id: root_b
+  author_name: civic_forum
+  text: "Biden says the economy is stronger, but housing is still out of reach for a lot of people. What are voters supposed to do with that?"
+
+agents:
+  - user_id: center_b
+    display_name: numbers_center
+    political_label: Center
+    aggression: 0.18
+    emotion: sadness
+  - user_id: left_b
+    display_name: wage_left
+    political_label: Left
+    aggression: 0.48
+    emotion: fear

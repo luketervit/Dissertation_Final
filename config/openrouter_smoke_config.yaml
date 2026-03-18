@@ -1,0 +1,30 @@
+llm:
+  temperature: 0.8
+  max_tokens: 80
+
+simulation:
+  max_rounds: 1
+  max_posts_per_round: 1
+  parallel_workers: 2
+
+root_post:
+  author_id: root_author
+  author_name: swing_voter_watch
+  text: "Trump is promising another round of tariffs and says it will fix inflation. Does anyone actually believe that helps regular people?"
+
+agents:
+  - user_id: agent_left_01
+    display_name: policy_left
+    political_label: Left
+    aggression: 0.55
+    emotion: anger
+  - user_id: agent_right_01
+    display_name: market_right
+    political_label: Right
+    aggression: 0.45
+    emotion: surprise
+  - user_id: agent_center_01
+    display_name: centrist_data
+    political_label: Center
+    aggression: 0.20
+    emotion: optimism

@@ -1,0 +1,25 @@
+llm:
+  temperature: 0.8
+  max_tokens: 140
+
+simulation:
+  max_rounds: 1
+  max_posts_per_round: 1
+  parallel_workers: 2
+
+root_post:
+  author_id: root_a
+  author_name: election_watch
+  text: "If both parties say they care about workers, why does every budget fight still end with higher costs for ordinary people?"
+
+agents:
+  - user_id: left_a
+    display_name: labor_left
+    political_label: Left
+    aggression: 0.52
+    emotion: anger
+  - user_id: right_a
+    display_name: tax_right
+    political_label: Right
+    aggression: 0.41
+    emotion: disgust

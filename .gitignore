@@ -67,6 +67,17 @@ models/cache/
 .DS_Store
 Thumbs.db
 .env
+.env.openrouter
+
+# Local preview / export artefacts
+.deck_preview/
+keynote_export_test/
+Luke_Tervit_VC_Pitch_Deck*.pptx
+luke.png
+
+# OpenRouter runtime outputs
+openrouter_output/
+openrouter_original_runs/
 
 # Archive (old/deprecated code)
 archive/
